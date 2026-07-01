@@ -3,6 +3,7 @@ shape: review-rewrite
 workdir: ..
 writer:
   provider: eve
+  model: openai-codex/gpt-5.5                     # a real writer; not minimax
   reviewers: [editorial, strategic, technical]   # demo agents; see examples/agents/
 inputs:
   - website-outline.md

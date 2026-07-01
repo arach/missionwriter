@@ -40,7 +40,9 @@ Install the `pi` coding agent so it's on your `PATH`:
 npm install -g @earendil-works/pi-coding-agent   # provides the `pi` binary
 ```
 
-`pi` resolves its **own** credentials (`~/.pi/agent/auth.json` or provider env vars), so no missionwriter key is needed for Eve. Its default provider/model come from `~/.pi/agent/settings.json` (e.g. `minimax` / `MiniMax-M2.7`); override per mission with `writer.model` (which also accepts a `provider/id` pattern like `anthropic/claude-opus-4.7`). Point at a specific binary with `PI_BIN`.
+`pi` resolves its **own** credentials (`~/.pi/agent/auth.json` or provider env vars), so no missionwriter key is needed for Eve. Its default provider/model come from `~/.pi/agent/settings.json`; override per mission with `writer.model`, which accepts a `provider/id` pattern. Point at a specific binary with `PI_BIN`.
+
+**Pick a real writer.** pi's default is often tuned for code (e.g. `minimax`), which drafts prose poorly. For writing missions, set `writer.model` to a strong prose model — GPT (`openai-codex/gpt-5.5`), Sonnet (`github-copilot/claude-sonnet-4.6`), or Grok. Run `pi --list-models` to see what your current auth actually reaches. The bundled examples default to `openai-codex/gpt-5.5`.
 
 ### Cursor writer (optional)
 

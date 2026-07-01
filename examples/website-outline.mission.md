@@ -3,6 +3,7 @@ shape: write
 workdir: ..
 writer:
   provider: eve
+  model: openai-codex/gpt-5.5    # a real writer; minimax (pi's default) writes poorly
 inputs:
   - README.md
   - package.json
