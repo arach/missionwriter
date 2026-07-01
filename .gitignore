@@ -1,0 +1,11 @@
+node_modules/
+dist/
+.env
+.env.local
+.DS_Store
+*.tsbuildinfo
+
+# Mission run artifacts (per-run output dirs created by `mw run`)
+.runs/
+# OpenScout local state
+.openscout/project.json
