@@ -3,6 +3,7 @@ shape: review-rewrite
 workdir: ..
 writer:
   provider: eve
+  reviewers: [editorial, strategic, technical]   # demo agents; see examples/agents/
 inputs:
   - website-outline.md
   - README.md

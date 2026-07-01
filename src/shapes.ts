@@ -70,13 +70,17 @@ function resolveShapeInstructions(spec: MissionSpec, options: BuildSystemPromptO
 
 function eveReviewRewriteInstructions(spec: MissionSpec): string {
   const inputList = spec.inputs?.length ? spec.inputs.join(", ") : "the listed input file(s)";
-  return `MISSION SHAPE: review-rewrite (Eve subagents)
+  const reviewers = spec.writer?.reviewers ?? [];
+  const reviewPhase = reviewers.length > 0
+    ? `1. REVIEW — Make a SINGLE call to the \`subagent\` tool in PARALLEL mode: pass a \`tasks\` array with
+     one entry per reviewer agent — ${reviewers.map(r => `"${r}"`).join(", ")}. Each task tells that agent
+     to review ${inputList} against the brief. One call runs them all in parallel; wait for their reports.`
+    : `1. REVIEW — Review ${inputList} against the brief. If reviewer agents are available through the
+     \`subagent\` tool, run them in parallel and gather their reports; otherwise review inline.`;
+  return `MISSION SHAPE: review-rewrite (Eve)
 Two phases:
-  1. REVIEW — Make a SINGLE call to the \`subagent\` tool in PARALLEL mode: pass a \`tasks\` array with
-     three entries, one per reviewer agent — "editorial", "strategic", and "technical". Each task tells
-     that agent to review ${inputList} against the brief (the technical reviewer should also read
-     README.md to verify accuracy). One call runs all three in parallel; wait for their reports.
-  2. REWRITE — Consolidate the three reports into the review output (reviews.md or the named review
+  ${reviewPhase}
+  2. REWRITE — Consolidate the review findings into the review output (reviews.md or the named review
      output), then rewrite ${inputList} applying the consensus fixes. Save as the named output.
 Preserve any YAML frontmatter on input files exactly when rewriting.`;
 }

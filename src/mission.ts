@@ -28,6 +28,8 @@ export interface ContributorSpec {
 export interface MissionWriterSpec {
   provider?: ProviderId;
   model?: string;
+  /** Names of subagent reviewer agents for the Eve writer to fan out over (review-rewrite). */
+  reviewers?: string[];
 }
 
 export interface MissionSpec {
@@ -95,7 +97,11 @@ function parseWriter(value: unknown): MissionWriterSpec | undefined {
   const raw = value as Record<string, unknown>;
   const provider = parseOptionalProvider(raw.provider, "writer.provider");
   const model = typeof raw.model === "string" ? raw.model : undefined;
-  return provider || model ? { provider, model } : undefined;
+  const reviewerList = Array.isArray(raw.reviewers)
+    ? raw.reviewers.map(String).map(s => s.trim()).filter(s => s.length > 0)
+    : [];
+  const reviewers = reviewerList.length > 0 ? reviewerList : undefined;
+  return provider || model || reviewers ? { provider, model, reviewers } : undefined;
 }
 
 function parseContributors(value: unknown): ContributorSpec[] | undefined {

@@ -126,7 +126,28 @@ The writer runs the core agent loop — it spawns the agent, gives it file tools
 | **`eve`** (default) | `pi` coding agent | pi's own (`~/.pi/agent/auth.json`) | Runs host-scoped in the workdir. `review` shape → read-only tools. Model from pi's settings unless overridden. |
 | **`cursor`** | `@cursor/sdk` | `CURSOR_API_KEY` | For `review-rewrite` with no contributors, fans out Cursor's native reviewer subagents. |
 
-**Fan-out review under Eve.** `pi` ships a `subagent` extension (single / parallel / chain modes with `{previous}` piping). Load it and define reviewer agents in `~/.pi/agent/agents/*.md` to fan out review voices natively — or just configure `contributors` (below), which works with either writer.
+### Enable Eve subagents (optional)
+
+For `review-rewrite`, the Eve writer can fan out review voices through pi's `subagent` tool instead of reviewing inline. Two one-time steps:
+
+```bash
+# 1. install pi's subagent extension (ships with pi; auto-discovered)
+PI=$(dirname "$(dirname "$(readlink -f "$(command -v pi)")")")
+ln -sfn "$PI/examples/extensions/subagent" ~/.pi/agent/extensions/subagent
+
+# 2. install the demo reviewer agents (or write your own)
+cp examples/agents/*.md ~/.pi/agent/agents/
+```
+
+Then name the reviewers in the mission — the core doesn't hard-code them:
+
+```yaml
+writer:
+  provider: eve
+  reviewers: [editorial, strategic, technical]   # agents in ~/.pi/agent/agents
+```
+
+The writer makes one parallel `subagent` call over those agents, consolidates their reports into the review output, then rewrites. Demo definitions live in [`examples/agents/`](examples/agents). If you omit `reviewers`, Eve reviews inline. `contributors` (below) is the writer-agnostic alternative and works with Cursor too.
 
 ---
 
