@@ -180,6 +180,21 @@ Built-in roles: `editorial-review`, `strategic-review`, `technical-precision`, `
 
 ---
 
+## Runs
+
+Every `mw run` records a run under `.runs/<timestamp>__<shape>/` (gitignored):
+
+- `run.json` — mission, shape, writer, model, timing, status (missionwriter's thin index).
+- the Eve session transcript (`.jsonl`) — captured via pi's `--session-dir`.
+
+```bash
+mw runs            # list past runs, newest first
+mw show            # render the latest run's Eve session to HTML and open it
+mw show <run-id>   # a specific run
+```
+
+`mw show` leans on Eve's own visibility: it renders the captured session with `pi --export`. missionwriter keeps the index; Eve provides the deep view.
+
 ## Notes
 
 - The workdir is the sandbox: the agent's file tools are scoped to it. Stay inside; don't touch files outside the declared inputs/outputs.

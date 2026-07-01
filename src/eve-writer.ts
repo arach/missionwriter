@@ -19,8 +19,13 @@ const READ_ONLY_TOOLS = "read,grep,find,ls";
  * lines the way the Cursor writer does: assistant text -> stdout, tools -> stderr.
  */
 export class EveWriter implements Writer {
-  async run({ spec, model, systemPrompt, briefWithReports }: MissionWriterContext): Promise<void> {
-    const args = ["--print", "--no-session", "--mode", "json"];
+  async run({ spec, model, systemPrompt, briefWithReports, runDir }: MissionWriterContext): Promise<void> {
+    const args = ["--print", "--mode", "json"];
+
+    // Capture Eve's own session transcript into the run dir so `mw show` can
+    // render it (pi --export). Without a run dir, stay ephemeral.
+    if (runDir) args.push("--session-dir", runDir);
+    else args.push("--no-session");
 
     // Layer the mission framing on top of pi's built-in coding-assistant prompt.
     if (systemPrompt.trim()) args.push("--append-system-prompt", systemPrompt);

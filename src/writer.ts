@@ -15,6 +15,8 @@ export interface MissionWriterContext {
   /** Contributor reports + brief, without the framing prefix. */
   briefWithReports: string;
   hasContributorReports: boolean;
+  /** Per-run directory under .runs/; writers may persist a transcript here. */
+  runDir?: string;
 }
 
 /**
