@@ -1,0 +1,260 @@
+@import "tailwindcss";
+@import "hudsonkit/styles";
+
+/*
+ * CSS is the #1 HudsonKit wiring risk. `hudsonkit/dist/styles.css` carries the
+ * theme tokens (:root + [data-hudson-*]) and pre-compiled chrome utilities, but
+ * our OWN components use the same Tailwind utilities — so this Tailwind build
+ * must also scan HudsonKit's SOURCE to regenerate every class the chrome uses.
+ * The package only ships `dist`, so we point @source at the real on-disk src.
+ */
+@source "./**/*.{ts,tsx}";
+@source "../src/**/*.{ts,tsx}";
+@source "../../../hudson/packages/web/hudsonkit/src/**/*.{ts,tsx}";
+
+/*
+ * Re-declare HudsonKit's semantic color mappings so utilities we author
+ * (bg-card, text-muted-foreground, text-success, border-border, …) compile in
+ * THIS build against the CSS vars that hudsonkit/styles defines per theme.
+ * Mirrors hudsonkit/src/styles/bundle.css @theme inline.
+ */
+@theme inline {
+  --color-background: oklch(var(--background));
+  --color-foreground: oklch(var(--foreground));
+  --color-card: oklch(var(--card));
+  --color-card-foreground: oklch(var(--card-foreground));
+  --color-popover: oklch(var(--popover));
+  --color-popover-foreground: oklch(var(--popover-foreground));
+  --color-primary: oklch(var(--primary));
+  --color-primary-foreground: oklch(var(--primary-foreground));
+  --color-secondary: oklch(var(--secondary));
+  --color-secondary-foreground: oklch(var(--secondary-foreground));
+  --color-muted: oklch(var(--muted));
+  --color-muted-foreground: oklch(var(--muted-foreground));
+  --color-accent: oklch(var(--accent));
+  --color-accent-foreground: oklch(var(--accent-foreground));
+  --color-destructive: oklch(var(--destructive));
+  --color-destructive-foreground: oklch(var(--destructive-foreground));
+  --color-warning: oklch(var(--warning));
+  --color-success: oklch(var(--success));
+  --color-info: oklch(var(--info));
+  --color-border: oklch(var(--border));
+  --color-input: oklch(var(--input));
+  --color-ring: oklch(var(--ring));
+  --font-sans: var(--hud-font-sans);
+  --font-mono: var(--hud-font-mono);
+  --font-editorial: var(--font-editorial-src), ui-serif, Georgia, Cambria, "Times New Roman", serif;
+  --radius-lg: var(--radius);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-sm: calc(var(--radius) - 4px);
+}
+
+html,
+body {
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+  background: oklch(var(--background));
+  color: oklch(var(--foreground));
+  font-family: var(--hud-font-sans);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* Editorial serif — optical sizing + ligatures for the writing surfaces. */
+.font-editorial {
+  font-optical-sizing: auto;
+  font-feature-settings: "kern" 1, "liga" 1, "calt" 1;
+  letter-spacing: -0.005em;
+}
+
+/*
+ * Editorial prose — the document is the star. A hand-tuned typographic scale
+ * (no @tailwindcss/typography dep) applied to react-markdown output. Serif body,
+ * generous measure (set by the container), real vertical rhythm. `.mw-prose-sm`
+ * tightens it for the supporting transcript narration.
+ */
+.mw-prose {
+  color: oklch(var(--foreground) / 0.9);
+  font-size: 16.5px;
+  line-height: 1.72;
+  letter-spacing: -0.003em;
+  overflow-wrap: break-word;
+}
+.mw-prose > :first-child {
+  margin-top: 0;
+}
+.mw-prose > :last-child {
+  margin-bottom: 0;
+}
+.mw-prose p {
+  margin: 1.05em 0;
+}
+.mw-prose h1 {
+  font-size: 1.82em;
+  line-height: 1.12;
+  font-weight: 600;
+  letter-spacing: -0.018em;
+  margin: 0 0 0.6em;
+  color: oklch(var(--foreground));
+}
+.mw-prose h2 {
+  font-size: 1.32em;
+  line-height: 1.2;
+  font-weight: 600;
+  letter-spacing: -0.012em;
+  margin: 1.9em 0 0.65em;
+  padding-bottom: 0.3em;
+  border-bottom: 1px solid oklch(var(--border) / 0.5);
+  color: oklch(var(--foreground));
+}
+.mw-prose h3 {
+  font-size: 1.1em;
+  font-weight: 600;
+  margin: 1.6em 0 0.5em;
+  color: oklch(var(--foreground) / 0.96);
+}
+.mw-prose h4 {
+  font-size: 0.98em;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  margin: 1.4em 0 0.4em;
+  color: oklch(var(--foreground) / 0.9);
+}
+.mw-prose a {
+  color: oklch(var(--foreground));
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  text-decoration-color: oklch(var(--foreground) / 0.35);
+  text-decoration-thickness: 1px;
+}
+.mw-prose a:hover {
+  text-decoration-color: oklch(var(--foreground) / 0.7);
+}
+.mw-prose strong {
+  font-weight: 640;
+  color: oklch(var(--foreground));
+}
+.mw-prose em {
+  font-style: italic;
+}
+.mw-prose ul,
+.mw-prose ol {
+  margin: 1.05em 0;
+  padding-left: 1.55em;
+}
+.mw-prose ul {
+  list-style: disc;
+}
+.mw-prose ol {
+  list-style: decimal;
+}
+.mw-prose li {
+  margin: 0.38em 0;
+  padding-left: 0.25em;
+}
+.mw-prose li::marker {
+  color: oklch(var(--muted-foreground) / 0.7);
+}
+.mw-prose li > ul,
+.mw-prose li > ol {
+  margin: 0.35em 0;
+}
+.mw-prose blockquote {
+  margin: 1.3em 0;
+  padding: 0.15em 0 0.15em 1.1em;
+  border-left: 2px solid oklch(var(--foreground) / 0.24);
+  color: oklch(var(--foreground) / 0.74);
+  font-style: italic;
+}
+.mw-prose blockquote p {
+  margin: 0.5em 0;
+}
+.mw-prose hr {
+  border: 0;
+  border-top: 1px solid oklch(var(--border) / 0.6);
+  margin: 2.2em 0;
+}
+.mw-prose :not(pre) > code {
+  font-family: var(--hud-font-mono);
+  font-size: 0.85em;
+  background: oklch(var(--muted) / 0.5);
+  border: 1px solid oklch(var(--border) / 0.6);
+  border-radius: 2px;
+  padding: 0.08em 0.36em;
+  white-space: break-spaces;
+}
+.mw-prose pre {
+  font-family: var(--hud-font-mono);
+  font-size: 0.78em;
+  line-height: 1.6;
+  background: oklch(var(--card) / 0.5);
+  border: 1px solid oklch(var(--border) / 0.7);
+  border-radius: 3px;
+  padding: 0.9em 1.1em;
+  overflow-x: auto;
+  margin: 1.35em 0;
+}
+.mw-prose pre code {
+  background: none;
+  border: 0;
+  padding: 0;
+  font-size: inherit;
+  white-space: pre;
+}
+.mw-prose table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 1.35em 0;
+  font-size: 0.85em;
+}
+.mw-prose th,
+.mw-prose td {
+  border: 1px solid oklch(var(--border) / 0.6);
+  padding: 0.5em 0.72em;
+  text-align: left;
+  vertical-align: top;
+}
+.mw-prose th {
+  background: oklch(var(--muted) / 0.4);
+  font-weight: 600;
+}
+.mw-prose img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 3px;
+}
+
+/* Supporting scale — assistant narration inside the transcript thread. */
+.mw-prose-sm {
+  font-size: 14px;
+  line-height: 1.62;
+}
+.mw-prose-sm p {
+  margin: 0.65em 0;
+}
+.mw-prose-sm h1,
+.mw-prose-sm h2,
+.mw-prose-sm h3 {
+  margin: 1em 0 0.4em;
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+
+/* Slim, theme-aware scrollbars for our own scroll areas. */
+.mw-scroll::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+.mw-scroll::-webkit-scrollbar-thumb {
+  background: oklch(var(--foreground) / 0.14);
+  border-radius: 6px;
+}
+.mw-scroll::-webkit-scrollbar-thumb:hover {
+  background: oklch(var(--foreground) / 0.24);
+}
+.mw-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}

@@ -9,3 +9,9 @@ dist/
 .runs/
 # OpenScout local state
 .openscout/project.json
+
+# Next.js runs viewer (HudsonKit app) — build + deps only; source is tracked
+viewer/node_modules/
+viewer/.next/
+viewer/next-env.d.ts
+viewer/*.tsbuildinfo
