@@ -27,7 +27,7 @@ export async function runMission(spec: MissionSpec): Promise<void> {
 
     // Mission-agnostic assembly: framing (system prompt), contributor reports,
     // and the brief. Writers consume `message` (all-in-one) or the split parts.
-    const systemPrompt = buildSystemPrompt(spec, { hasContributorReports });
+    const systemPrompt = buildSystemPrompt(spec, { hasContributorReports, writerProvider: provider });
     const reportsBlock = hasContributorReports
       ? `=== CONTRIBUTOR REPORTS ===\n${formatContributorReports(contributorReports)}\n\n`
       : "";

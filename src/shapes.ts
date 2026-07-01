@@ -1,7 +1,8 @@
-import type { MissionShape, MissionSpec } from "./mission.js";
+import type { MissionShape, MissionSpec, ProviderId } from "./mission.js";
 
 export interface BuildSystemPromptOptions {
   hasContributorReports?: boolean;
+  writerProvider?: ProviderId;
 }
 
 const SHARED_PREAMBLE = `You are operating inside a working directory as an autonomous writing/review agent.
@@ -44,9 +45,7 @@ export function buildSystemPrompt(spec: MissionSpec, options: BuildSystemPromptO
   const budget = spec.budget
     ? `\nBudget: ${spec.budget.tokens ?? "—"} tokens, ${spec.budget.toolCalls ?? "—"} tool calls. Halt and report when reached.`
     : "";
-  const shapeInstructions = options.hasContributorReports && CONTRIBUTOR_REPORT_INSTRUCTIONS[spec.shape]
-    ? CONTRIBUTOR_REPORT_INSTRUCTIONS[spec.shape]
-    : SHAPE_INSTRUCTIONS[spec.shape];
+  const shapeInstructions = resolveShapeInstructions(spec, options);
 
   return [
     SHARED_PREAMBLE,
@@ -55,4 +54,29 @@ export function buildSystemPrompt(spec: MissionSpec, options: BuildSystemPromptO
     "",
     `Workdir: ${spec.workdir}${inputs}${outputs}${budget}`,
   ].join("\n");
+}
+
+function resolveShapeInstructions(spec: MissionSpec, options: BuildSystemPromptOptions): string {
+  if (options.hasContributorReports && CONTRIBUTOR_REPORT_INSTRUCTIONS[spec.shape]) {
+    return CONTRIBUTOR_REPORT_INSTRUCTIONS[spec.shape]!;
+  }
+  // Eve (pi) fans out review voices via pi's `subagent` tool + reviewer agents,
+  // rather than Cursor's native reviewer subagents.
+  if (spec.shape === "review-rewrite" && options.writerProvider === "eve") {
+    return eveReviewRewriteInstructions(spec);
+  }
+  return SHAPE_INSTRUCTIONS[spec.shape];
+}
+
+function eveReviewRewriteInstructions(spec: MissionSpec): string {
+  const inputList = spec.inputs?.length ? spec.inputs.join(", ") : "the listed input file(s)";
+  return `MISSION SHAPE: review-rewrite (Eve subagents)
+Two phases:
+  1. REVIEW — Make a SINGLE call to the \`subagent\` tool in PARALLEL mode: pass a \`tasks\` array with
+     three entries, one per reviewer agent — "editorial", "strategic", and "technical". Each task tells
+     that agent to review ${inputList} against the brief (the technical reviewer should also read
+     README.md to verify accuracy). One call runs all three in parallel; wait for their reports.
+  2. REWRITE — Consolidate the three reports into the review output (reviews.md or the named review
+     output), then rewrite ${inputList} applying the consensus fixes. Save as the named output.
+Preserve any YAML frontmatter on input files exactly when rewriting.`;
 }
