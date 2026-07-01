@@ -1,75 +1,48 @@
-# Website Outline — missionwriter
-
----
+# missionwriter Website Outline
 
 ## 1. Hero
 
-**Headline (≤8 words):**
-> Brief the agent. Get the draft.
+**Headline:** Writing missions for coding agents
 
-**Subhead:**
-> Hand a brief to a coding agent; collect the draft.
+**Subhead:** missionwriter turns a markdown mission file into a scoped writing or review run, using Eve/`pi` as the default writer agent and optional contributor reviews from other providers.
 
-**Primary CTA:**
-> [Read the README →](#)
+**Primary CTA:** Run a mission
 
-**Secondary line:**
-> `bun install` · `npm install -g @earendil-works/pi-coding-agent` · `bun link` · `mw run path/to/mission.md`
-
----
+**Install/run:** `bun install` → `mw run path/to/mission.md`
 
 ## 2. What it is
 
-missionwriter is a lightweight CLI for delegating writing and review work to a coding agent that operates directly inside your project directory. You describe what you need in a mission file — a short markdown brief with frontmatter — and the agent produces the outputs, scoped to your workdir.
+missionwriter is a light CLI for running writing and review missions in a real workdir. You define the brief, inputs, outputs, writer, and shape in one markdown file; `mw run` hands that context to the agent, which reads and writes files with scoped tools.
 
----
+## 3. Feature sections
 
-## 3. Feature Sections
+### Mission files are the interface
 
-### 3a. Mission files are plain markdown
+A mission is markdown with YAML frontmatter and a free-text brief. The frontmatter declares the workdir, inputs, outputs, writer, contributors, budget framing, and shape, so the run is explicit and repeatable.
 
-A mission is a `.md` file with YAML frontmatter and a brief. No config language to learn. Declare the workdir, the writer, any review contributors, and the inputs and outputs — then hand it to `mw run` and collect the results.
+### Eve/`pi` is the writer harness
 
-Pick the shape in frontmatter:
+The default writer is Eve, powered by the `pi` coding agent. missionwriter does not implement its own agent loop; it parses the mission, assembles the prompt, and lets the agent bring its own tools, sessions, provider config, and model selection.
 
-- **`review`** — read inputs, emit a structured critique. Read-only; no file writes.
-- **`write`** — synthesize the brief into the named output file(s).
-- **`review-rewrite`** — run the review, capture findings, then produce a rewritten draft.
+### Pick the shape of the run
 
-```yaml
----
-shape: review-rewrite
-workdir: ./docs
-inputs:
-  - source.md
-outputs:
-  - draft.md
-  - reviews.md
----
-Brief: Revise this document for clarity and technical accuracy.
-```
+Use `review` for read-only critique, `write` for producing named files, or `review-rewrite` for a review pass followed by a rewrite. The shape tells the writer what kind of work to perform and what outputs to create.
 
-### 3b. The writer is Eve
+### Add contributor review voices
 
-The writer is Eve, the `pi` coding agent. missionwriter parses your mission, assembles the prompt, and drives Eve — which means Eve's tools, session handling, provider config, and model selection all apply unchanged. Model is inherited from Eve's settings unless you override it with `writer.model` (accepts `provider/id` patterns like `anthropic/claude-opus-4.7`). Swap models, swap providers, keep the same `mw run` call.
+Contributors run before the writer and return markdown reports without editing files. Use providers such as xAI, OpenRouter, MiniMax, agent-sessions, or a local Copilot CLI bridge to bring separate review perspectives into the final synthesis.
 
-### 3c. Multi-provider review contributors
+## 4. How it works
 
-Define reviewer agents in the mission's `contributors` block and they run before the writer, returning markdown reports for the writer to synthesize. Providers include `xai`, `openrouter`, `minimax`, `agent-sessions` (with optional persistent tmux sessions), and `copilot-cli`. Built-in roles cover editorial review, strategic review, technical precision, and fresh-context research — or write your own prompt.
+1. **Mission:** Write a `.mission.md` file with frontmatter plus the brief.
+2. **Writer agent in the workdir:** `mw run` starts the selected writer, scoped to the declared workdir, with the mission inputs and any contributor reports.
+3. **Files out:** The agent writes the named outputs, while run artifacts and the Eve session transcript are recorded under `.runs/`.
 
-### 3d. Outputs land in the workdir
+## 5. Closing CTA
 
-The agent's file tools are scoped to the declared `workdir`. Nothing is written outside it. Run artifacts go under `.runs/` (gitignored). Your inputs are never modified.
-
----
-
-## 4. Closing CTA
-
-Run your first mission today.
+Make writing work explicit: put the brief, files, and agent in a mission, then run it.
 
 ```bash
 bun install
-npm install -g @earendil-works/pi-coding-agent
-bun link
-mw run examples/ops-control-minimap.mission.md
+mw run path/to/mission.md
 ```
