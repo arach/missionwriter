@@ -2,13 +2,14 @@
 import { loadMission } from "../src/mission.js";
 import { runMission } from "../src/runner.js";
 import { runSessionCommand } from "../src/session-cli.js";
-import { printRuns, showRun } from "../src/runs.js";
+import { printRuns, showRun, serveRuns } from "../src/runs.js";
 
 function usage(exitCode = 0): never {
   console.error(`Usage:
   mw run <mission.md>
   mw runs                 # list past runs (.runs/)
   mw show [run-id]        # render a run's Eve session to HTML and open it (default: latest)
+  mw serve [port]         # web viewer for runs (default port 4321)
   mw session <action> [args]
 
 Run \`mw session help\` for tmux session management.
@@ -50,6 +51,8 @@ if (cmd === "run") {
   printRuns();
 } else if (cmd === "show") {
   showRun(missionPath);
+} else if (cmd === "serve") {
+  serveRuns(missionPath ? Number(missionPath) : undefined);
 } else if (cmd === "session") {
   try {
     await runSessionCommand(process.argv.slice(3));

@@ -132,6 +132,84 @@ export function showRun(idHint?: string): void {
   console.error(`opened ${html}`);
 }
 
+/**
+ * `mw serve [port]` — a tiny local viewer for `.runs/`. The index lists runs;
+ * each run links to Eve's own transcript, rendered on demand with `pi --export`.
+ * missionwriter provides the index; Eve provides the deep view.
+ */
+export function serveRuns(port = 4321): void {
+  Bun.serve({
+    port,
+    fetch(req) {
+      const url = new URL(req.url);
+      const rawMatch = url.pathname.match(/^\/runs\/([^/]+)\/html$/);
+      if (rawMatch) return runHtml(decodeURIComponent(rawMatch[1]!));
+      const viewMatch = url.pathname.match(/^\/runs\/([^/]+)$/);
+      if (viewMatch) return runView(decodeURIComponent(viewMatch[1]!));
+      if (url.pathname === "/") return html(indexPage());
+      return new Response("not found", { status: 404 });
+    },
+  });
+  console.error(`missionwriter runs → http://localhost:${port}`);
+}
+
+function html(body: string, status = 200): Response {
+  return new Response(body, { status, headers: { "content-type": "text/html; charset=utf-8" } });
+}
+
+const PAGE_CSS = `
+  :root { color-scheme: dark }
+  body { background:#0d1117; color:#c9d1d9; font:14px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace; margin:0 }
+  header { padding:16px 24px; border-bottom:1px solid #21262d; display:flex; gap:12px; align-items:baseline }
+  h1 { font-size:15px; margin:0; color:#e6edf3 } a { color:#58a6ff; text-decoration:none } a:hover { text-decoration:underline }
+  main { padding:12px 24px } table { border-collapse:collapse; width:100% }
+  td,th { text-align:left; padding:8px 14px 8px 0; border-bottom:1px solid #161b22; white-space:nowrap }
+  th { color:#8b949e; font-weight:normal; font-size:12px }
+  .ok{color:#3fb950} .fail{color:#f85149} .run{color:#d29922} .muted{color:#6e7681}
+  iframe { width:100%; height:calc(100vh - 54px); border:0; background:#fff }
+`;
+
+function indexPage(): string {
+  const runs = listRuns();
+  const rows = runs.map(r => {
+    const icon = r.status === "finished" ? '<span class="ok">✓</span>'
+      : r.status === "failed" ? '<span class="fail">✗</span>' : '<span class="run">…</span>';
+    const dur = r.durationMs != null ? `${Math.round(r.durationMs / 1000)}s` : "—";
+    const hasSession = findSessionJsonl(join(runsRoot(), r.id)) != null;
+    const cell = hasSession
+      ? `<a href="/runs/${encodeURIComponent(r.id)}">${esc(r.id)}</a>`
+      : `<span class="muted">${esc(r.id)}</span>`;
+    return `<tr><td>${icon}</td><td>${cell}</td><td>${esc(r.shape)}</td><td class="muted">${esc(r.writer)}/${esc(r.model)}</td><td class="muted">${dur}</td></tr>`;
+  }).join("");
+  const body = runs.length
+    ? `<table><thead><tr><th></th><th>run</th><th>shape</th><th>writer</th><th>dur</th></tr></thead><tbody>${rows}</tbody></table>`
+    : `<p class="muted">no runs yet — <code>mw run &lt;mission&gt;</code> writes them under .runs/</p>`;
+  return `<!doctype html><meta charset=utf-8><title>missionwriter runs</title><style>${PAGE_CSS}</style>` +
+    `<header><h1>missionwriter</h1><span class="muted">runs</span></header><main>${body}</main>`;
+}
+
+function runView(id: string): Response {
+  const dir = join(runsRoot(), id);
+  if (!findSessionJsonl(dir)) return html(`<p>no Eve session for ${esc(id)}</p>`, 404);
+  return html(`<!doctype html><meta charset=utf-8><title>${esc(id)}</title><style>${PAGE_CSS}</style>` +
+    `<header><a href="/">← runs</a><span class="muted">${esc(id)}</span></header>` +
+    `<iframe src="/runs/${encodeURIComponent(id)}/html"></iframe>`);
+}
+
+function runHtml(id: string): Response {
+  const dir = join(runsRoot(), id);
+  const jsonl = findSessionJsonl(dir);
+  if (!jsonl) return html("no session", 404);
+  const out = join(dir, "session.html");
+  const exported = spawnSync(PI_BIN, ["--export", jsonl, out], { stdio: "ignore" });
+  if (exported.status !== 0 || !existsSync(out)) return html("pi --export failed", 500);
+  return new Response(readFileSync(out), { headers: { "content-type": "text/html; charset=utf-8" } });
+}
+
+function esc(s: string): string {
+  return s.replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]!);
+}
+
 /** pi may nest the session under a project slug inside --session-dir; find the newest .jsonl. */
 function findSessionJsonl(dir: string): string | null {
   const found: string[] = [];
