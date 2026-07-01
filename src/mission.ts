@@ -3,7 +3,7 @@ import { resolve, dirname } from "node:path";
 import { parse as parseYaml } from "yaml";
 
 export type MissionShape = "review" | "write" | "review-rewrite";
-export type ProviderId = "cursor" | "xai" | "openrouter" | "minimax" | "copilot-cli" | "agent-sessions";
+export type ProviderId = "eve" | "cursor" | "xai" | "openrouter" | "minimax" | "copilot-cli" | "agent-sessions";
 export type ContributorWeight = "primary" | "secondary" | "fallback";
 export type AgentSessionTransport = "direct" | "tmux";
 export type TmuxMissionEndPolicy = "detach" | "kill" | "keep";
@@ -46,7 +46,7 @@ export interface MissionSpec {
 }
 
 const FRONTMATTER_RE = /^---\n([\s\S]*?)\n---\n?([\s\S]*)$/;
-const PROVIDERS = new Set<ProviderId>(["cursor", "xai", "openrouter", "minimax", "copilot-cli", "agent-sessions"]);
+const PROVIDERS = new Set<ProviderId>(["eve", "cursor", "xai", "openrouter", "minimax", "copilot-cli", "agent-sessions"]);
 const WEIGHTS = new Set<ContributorWeight>(["primary", "secondary", "fallback"]);
 
 export function loadMission(path: string): MissionSpec {

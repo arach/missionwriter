@@ -2,6 +2,7 @@ import { formatContributorReports, runContributorReports } from "./contributors.
 import type { MissionSpec, ProviderId } from "./mission.js";
 import { buildSystemPrompt } from "./shapes.js";
 import { CursorWriter } from "./cursor-writer.js";
+import { EveWriter } from "./eve-writer.js";
 import type { Writer } from "./writer.js";
 import {
   defaultResolvedPolicy,
@@ -58,18 +59,20 @@ interface WriterSelection {
 
 function resolveWriter(spec: MissionSpec): WriterSelection {
   return {
-    provider: spec.writer?.provider ?? spec.provider ?? "cursor",
+    provider: spec.writer?.provider ?? spec.provider ?? "eve",
     model: spec.writer?.model ?? spec.model ?? DEFAULT_MODEL,
   };
 }
 
 function createWriter(provider: ProviderId): Writer {
   switch (provider) {
+    case "eve":
+      return new EveWriter();
     case "cursor":
       return new CursorWriter();
     default:
       throw new Error(
-        `writer provider '${provider}' is not supported for file-writing missions yet; use non-Cursor providers as contributors`,
+        `writer provider '${provider}' is not a file-writing writer; use 'eve' or 'cursor' (other providers run as contributors)`,
       );
   }
 }

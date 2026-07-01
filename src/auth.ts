@@ -16,6 +16,9 @@ interface ProviderSecretConfig {
 }
 
 const PROVIDER_SECRETS: Record<ProviderId, ProviderSecretConfig | null> = {
+  // eve drives the `pi` coding agent, which resolves its own credentials
+  // (~/.pi/agent/auth.json or provider env vars) — no missionwriter-held key.
+  eve: null,
   cursor: {
     displayName: "Cursor",
     envVars: ["CURSOR_API_KEY"],

@@ -1,8 +1,30 @@
 # missionwriter
 
-A light CLI for running writing & review missions on top of [`@cursor/sdk`](https://www.npmjs.com/package/@cursor/sdk), with optional review contributors from other LLM providers.
+A light CLI for running **writing & review missions** with a coding agent.
 
-A mission is a markdown file (frontmatter + brief) describing what to write or review and where. `mw run mission.md` spawns a Cursor agent in the working directory with file tools. For `review-rewrite` missions, it either uses Cursor's native reviewer subagents or gathers configured contributor reports first, then asks Cursor to synthesize the reports and write files.
+You write a *mission* — a markdown file with a bit of frontmatter and a brief — and `mw run` hands it to an agent working inside a scoped directory with file tools. The agent reads your inputs, does the work, and writes the outputs.
+
+The core agent is the **Eve agent** — the [`pi`](https://github.com/earendil-works) coding agent — with an optional [Cursor](https://www.npmjs.com/package/@cursor/sdk) writer and review "contributors" from other LLM providers.
+
+```bash
+mw run examples/ops-control-minimap.mission.md
+```
+
+---
+
+## How it works
+
+```
+mission.md ──▶ mw ──▶ writer agent (Eve / pi)  ──▶ files in the workdir
+   (frontmatter        │  scoped to workdir          (draft.md, reviews.md, …)
+    + brief)           │  read · write · edit
+                       └─ optional: contributor reviews gathered first,
+                          then synthesized by the writer
+```
+
+The writer *is* the harness. missionwriter doesn't carry its own agent loop — it parses the mission, assembles the prompt (framing + brief + any contributor reports), and drives the agent. For Eve that's the `pi` coding agent, which brings its own tools, session handling, and provider/model config.
+
+---
 
 ## Setup
 
@@ -10,74 +32,76 @@ A mission is a markdown file (frontmatter + brief) describing what to write or r
 bun install
 ```
 
-Provide a Cursor API key one of three ways (env wins if multiple are set):
+### Eve writer (default)
+
+Install the `pi` coding agent so it's on your `PATH`:
 
 ```bash
-# Either: ambient env var
-export CURSOR_API_KEY=...
-
-# Or: shared Mission Writer providers file
-mkdir -p ~/.missionwriter
-echo 'CURSOR_API_KEY=...' > ~/.missionwriter/providers.env
-
-# Or: dotenv-style file at a stable path
-echo 'CURSOR_API_KEY=...' > ~/.cursor/api_key.env
+npm install -g @earendil-works/pi-coding-agent   # provides the `pi` binary
 ```
 
-Provider keys are resolved just-in-time and cached in memory for the current `mw` run. Mission Writer also falls back to `secret get NAME`, so xAI can be provided as:
+`pi` resolves its **own** credentials (`~/.pi/agent/auth.json` or provider env vars), so no missionwriter key is needed for Eve. Its default provider/model come from `~/.pi/agent/settings.json` (e.g. `minimax` / `MiniMax-M2.7`); override per mission with `writer.model` (which also accepts a `provider/id` pattern like `anthropic/claude-opus-4.7`). Point at a specific binary with `PI_BIN`.
+
+### Cursor writer (optional)
+
+To use Cursor instead (`writer: { provider: cursor }`), provide a `CURSOR_API_KEY` one of three ways (env wins):
 
 ```bash
-secret get XAI_API_KEY
+export CURSOR_API_KEY=...                          # ambient env
+echo 'CURSOR_API_KEY=...' > ~/.missionwriter/providers.env   # shared providers file
+echo 'CURSOR_API_KEY=...' > ~/.cursor/api_key.env  # cursor dotenv
 ```
 
-The command is only invoked when an xAI contributor actually runs.
+missionwriter also falls back to `secret get NAME`, so keys can live in your keychain.
 
-Optional: `bun link` to put `mw` on PATH globally.
+Optional: `bun link` to put `mw` on your `PATH` globally.
+
+---
 
 ## Usage
 
 ```bash
 bun bin/mw.ts run examples/ops-control-minimap.mission.md
-# or after `bun link`:
+# or, after `bun link`:
 mw run path/to/mission.md
+```
 
-# manage detached tmux contributor sessions
+Assistant text streams to **stdout**; tool calls and status go to **stderr**, so you can pipe the prose cleanly:
+
+```bash
+mw run mission.md > draft-log.txt
+```
+
+Manage detached tmux contributor sessions (see [Contributors](#contributors)):
+
+```bash
 mw session list
 mw session attach opus-reviewer --exec
 mw session compact opus-reviewer
-mw session clear opus-reviewer
 mw session timeline opus-reviewer
 ```
+
+---
 
 ## Mission file format
 
 ```yaml
 ---
 shape: review | write | review-rewrite
-workdir: ./relative/path        # defaults to dirname(mission file)
-provider: cursor                # optional writer provider, default 'cursor'
-model: default                  # any model the SDK exposes via Cursor.models.list()
+workdir: ./relative/path        # defaults to the mission file's directory
 writer:
-  provider: cursor              # optional explicit writer
-  model: default
-contributors:
+  provider: eve                 # 'eve' (default) | 'cursor'
+  model: default                # 'default' inherits pi's model; or 'provider/id'
+contributors:                   # optional review voices, gathered before the writer
   - id: grok-strategist
     provider: xai
     model: grok-4.3
     role: strategic-review
-    weight: primary
   - id: opus-reviewer
     provider: agent-sessions
     model: claude-opus-4-8
-    transport: tmux          # optional: direct (default) | tmux
+    transport: tmux             # direct (default) | tmux
     role: engineering-docs-review
-tmux:                        # optional tmux lifecycle defaults for agent-sessions/tmux
-  idleTimeoutMs: 1800000     # kill after 30m idle (0 = never auto-kill)
-  onMissionEnd: detach       # detach (default) | kill | keep
-  - id: minimax-precision
-    provider: minimax
-    model: MiniMax-M3
-    role: technical-precision
 inputs:
   - source.md
 outputs:
@@ -91,33 +115,52 @@ budget:
 Brief: free text describing what to do.
 ```
 
+---
+
+## Writers
+
+The writer runs the core agent loop — it spawns the agent, gives it file tools scoped to the workdir, and streams output. Select it with `writer.provider` (or the top-level `provider`).
+
+| Writer | Backend | Auth | Notes |
+| --- | --- | --- | --- |
+| **`eve`** (default) | `pi` coding agent | pi's own (`~/.pi/agent/auth.json`) | Runs host-scoped in the workdir. `review` shape → read-only tools. Model from pi's settings unless overridden. |
+| **`cursor`** | `@cursor/sdk` | `CURSOR_API_KEY` | For `review-rewrite` with no contributors, fans out Cursor's native reviewer subagents. |
+
+**Fan-out review under Eve.** `pi` ships a `subagent` extension (single / parallel / chain modes with `{previous}` piping). Load it and define reviewer agents in `~/.pi/agent/agents/*.md` to fan out review voices natively — or just configure `contributors` (below), which works with either writer.
+
+---
+
 ## Shapes
 
-- **`review`** — read inputs, produce a structured critique. No rewriting.
+- **`review`** — read inputs, produce a structured critique. No rewriting (read-only tools).
 - **`write`** — synthesize the brief into the named output file(s).
-- **`review-rewrite`** — fan out review subagents in parallel, consolidate reports, produce a rewritten draft.
+- **`review-rewrite`** — review the inputs, consolidate findings into `reviews.md`, then produce a rewritten `draft.md`.
+
+---
 
 ## Contributors
 
-Contributors are review voices that run before the Cursor writer. They receive the mission brief and listed input files, return markdown reports, and do not edit files directly.
+Contributors are review voices that run **before** the writer. They receive the brief and listed inputs, return markdown reports, and don't edit files — the writer then synthesizes their reports into the outputs.
 
-Supported contributor providers:
+| Provider | Default model | Key |
+| --- | --- | --- |
+| `xai` | `grok-4.3` | `XAI_API_KEY` |
+| `openrouter` | `openrouter/auto` | `OPENROUTER_API_KEY` |
+| `minimax` | `MiniMax-M3` | `MINIMAX_API_KEY` |
+| `agent-sessions` | `claude-opus-4-8` | needs `claude` on `PATH` |
+| `copilot-cli` | `gemini-3.1-pro-preview` | local `copilot-ask` bridge |
 
-- **`xai`** — OpenAI-compatible xAI chat completions. Default model: `grok-4.3`. Key: `XAI_API_KEY`.
-- **`openrouter`** — OpenRouter chat completions. Default model: `openrouter/auto`. Key: `OPENROUTER_API_KEY`.
-- **`minimax`** — MiniMax OpenAI-compatible chat completions. Default model: `MiniMax-M3`. Key: `MINIMAX_API_KEY`.
-- **`agent-sessions`** — Claude Code via TypeScript SDK. Default model: `claude-opus-4-8`. Requires `claude` on PATH; `transport: tmux` also requires `tmux`.
-  - **`transport: direct`** (default) — ephemeral `SessionRegistry` subprocess via [`@openscout/agent-sessions`](https://www.npmjs.com/package/@openscout/agent-sessions)
-  - **`transport: tmux`** — persistent tmux pane with Claude Code, reused across contributor turns in the same `mw run`. Prompts via paste-buffer, response via pane capture. Sessions are tracked with a stderr timeline (`[mw:tmux]`) and saved to `~/.missionwriter/tmux-timeline.json`.
-    - Default lifecycle: **detach on mission end** (session stays alive; attach with `tmux attach -t mw-<contributor-id>`), **kill after 30m idle** (idle timer runs during the mission; after detach, a background watcher kills the session when idle time expires).
-    - Override globally with mission `tmux:` or per contributor `tmux:` (`idleTimeoutMs`, `onMissionEnd: detach | kill | keep`).
-    - After detach, manage sessions with `mw session` (`list`, `attach`, `compact`, `clear`, `kill`, `timeline`). State lives in `~/.missionwriter/tmux-sessions.json`.
-- **`copilot-cli`** — local `copilot-ask` bridge. Default model: `gemini-3.1-pro-preview` (non-Claude; use `copilot-ask --list-models` for GPT/Gemini options).
+`agent-sessions` supports two transports:
 
-Known roles with built-in prompts: `editorial-review`, `strategic-review`, `technical-precision`, `engineering-docs-review`, `fresh-context-research`. You can also provide a custom `prompt` per contributor.
+- **`direct`** (default) — ephemeral subprocess via [`@openscout/agent-sessions`](https://www.npmjs.com/package/@openscout/agent-sessions).
+- **`transport: tmux`** — a persistent tmux pane with Claude Code, reused across turns in a run. Sessions **detach on mission end** by default (attach with `tmux attach -t mw-<id>`) and self-kill after 30m idle. Tune with a mission-level or per-contributor `tmux:` block (`idleTimeoutMs`, `onMissionEnd: detach | kill | keep`), and manage them with `mw session` (`list`, `attach`, `compact`, `clear`, `kill`, `timeline`).
+
+Built-in roles: `editorial-review`, `strategic-review`, `technical-precision`, `engineering-docs-review`, `fresh-context-research`. Or give any contributor a custom `prompt`.
+
+---
 
 ## Notes
 
-- Workdir is sandboxed to the resolved path. The agent has Read/Write/Edit/Glob/Grep/Shell tools scoped to it.
-- `review-rewrite` uses Cursor's native reviewer subagents when no contributors are configured. When contributors are configured, their reports replace the native review fanout.
-- Output streams to stdout as the agent works; tool calls and result status go to stderr so you can pipe assistant text cleanly.
+- The workdir is the sandbox: the agent's file tools are scoped to it. Stay inside; don't touch files outside the declared inputs/outputs.
+- `budget` (tokens / tool calls) is advisory framing passed to the agent, not a hard enforced cap.
+- Run artifacts land under `.runs/` (gitignored).

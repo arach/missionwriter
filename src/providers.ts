@@ -31,6 +31,9 @@ interface OpenAiCompatibleConfig {
 }
 
 const DEFAULT_MODELS: Record<ProviderId, string> = {
+  // eve is a writer provider, not a contributor; pi resolves its own default
+  // model from ~/.pi settings. This entry is only here to satisfy the map.
+  eve: "default",
   cursor: "default",
   xai: "grok-4.3",
   openrouter: "openrouter/auto",
