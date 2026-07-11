@@ -1,10 +1,20 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from "react";
 import { useSearchParams } from "next/navigation";
-import { Frame, NavigationBar, SidePanel, StatusBar } from "hudsonkit/chrome";
+import { ThemeProvider, useTheme, type HudsonApp } from "hudsonkit";
+import { AppShell, useAppShellSidePanels } from "hudsonkit/app-shell";
 import {
   AlertTriangle,
+  Bot,
   FileText,
   GitCompareArrows,
   History,
@@ -14,7 +24,8 @@ import {
 } from "lucide-react";
 import type { RunView } from "@/src/runs-data";
 import { basename, editorialTitle, formatAbsolute, humanDuration, relativeTime } from "@/src/format";
-import { DocumentSurface } from "./components/DocumentSurface";
+import { DocumentSurface, type DocumentTab } from "./components/DocumentSurface";
+import { MissionwriterAgentInspector, MissionwriterAgentProvider } from "./components/MissionwriterAgent";
 import { THEME_STORAGE_KEY } from "./theme-key";
 
 /** A run has a captured document when any declared output produced bytes. */
@@ -25,11 +36,6 @@ function runHasDocument(run: RunView): boolean {
 function runHasContent(run: RunView): boolean {
   return run.hasSession || runHasDocument(run);
 }
-
-/* ── layout constants (mirror HudsonKit SHELL_THEME.layout) ──────────────── */
-const NAV_H = 48;
-const STATUS_H = 28;
-const PANEL_W = 288;
 
 type Status = RunView["status"];
 
@@ -288,41 +294,52 @@ function CenteredState({ children }: { children: React.ReactNode }) {
   );
 }
 
-/* ── theme toggle ────────────────────────────────────────────────────────── */
-
-function useTheme(): [string, () => void] {
-  const [theme, setTheme] = useState("dark");
-
-  useEffect(() => {
-    const current = document.documentElement.dataset.hudsonTheme || "dark";
-    setTheme(current);
-  }, []);
-
-  const toggle = useCallback(() => {
-    const next = (document.documentElement.dataset.hudsonTheme || "dark") === "dark" ? "light" : "dark";
-    document.documentElement.dataset.hudsonTheme = next;
-    try {
-      localStorage.setItem(THEME_STORAGE_KEY, JSON.stringify({ theme: next, template: "hudson" }));
-    } catch {
-      /* ignore */
-    }
-    setTheme(next);
-  }, []);
-
-  return [theme, toggle];
+interface RunCounts {
+  total: number;
+  finished: number;
+  running: number;
+  failed: number;
+  withSession: number;
+  withDoc: number;
 }
 
-/* ── main viewer ─────────────────────────────────────────────────────────── */
+interface MissionwriterState {
+  runs: RunView[] | null;
+  error: string | null;
+  search: string;
+  setSearch: (value: string) => void;
+  selectedId: string | null;
+  selectedTab: DocumentTab | undefined;
+  now: number;
+  filtered: RunView[];
+  selected: RunView | null;
+  counts: RunCounts;
+  load: () => Promise<void>;
+  selectRun: (id: string, tab?: DocumentTab) => void;
+}
 
-export default function RunsViewer() {
+const MissionwriterContext = createContext<MissionwriterState | null>(null);
+
+function useMissionwriterState(): MissionwriterState {
+  const context = useContext(MissionwriterContext);
+  if (!context) throw new Error("Missionwriter app components must be rendered inside MissionwriterProvider");
+  return context;
+}
+
+/* ── app Provider ────────────────────────────────────────────────────────── */
+
+function MissionwriterProvider({ children }: { children: ReactNode }) {
   const searchParams = useSearchParams();
 
   const [runs, setRuns] = useState<RunView[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(() => searchParams.get("run"));
+  const [selectedTab, setSelectedTab] = useState<DocumentTab | undefined>(() => {
+    const tab = searchParams.get("tab");
+    return tab === "document" || tab === "diff" || tab === "live" || tab === "transcript" ? tab : undefined;
+  });
   const [now, setNow] = useState(() => Date.now());
-  const [theme, toggleTheme] = useTheme();
 
   /* poll the run index (cheap json reads) */
   const load = useCallback(async () => {
@@ -348,10 +365,13 @@ export default function RunsViewer() {
     return () => clearInterval(t);
   }, []);
 
-  const selectRun = useCallback((id: string) => {
+  const selectRun = useCallback((id: string, tab?: DocumentTab) => {
     setSelectedId(id);
+    setSelectedTab(tab);
     const u = new URL(window.location.href);
     u.searchParams.set("run", id);
+    if (tab) u.searchParams.set("tab", tab);
+    else u.searchParams.delete("tab");
     window.history.replaceState(null, "", u);
   }, []);
 
@@ -378,7 +398,7 @@ export default function RunsViewer() {
     [runs, selectedId],
   );
 
-  const counts = useMemo(() => {
+  const counts = useMemo<RunCounts>(() => {
     const c = { total: 0, finished: 0, running: 0, failed: 0, withSession: 0, withDoc: 0 };
     for (const r of runs ?? []) {
       c.total++;
@@ -389,108 +409,34 @@ export default function RunsViewer() {
     return c;
   }, [runs]);
 
-  const statusBarStatus = selected
-    ? { label: STATUS_META[selected.status].label.toUpperCase(), color: STATUS_META[selected.status].barColor }
-    : ({ label: runs && runs.length ? "READY" : "IDLE", color: "neutral" } as const);
+  const value = useMemo<MissionwriterState>(() => ({
+    runs,
+    error,
+    search,
+    setSearch,
+    selectedId,
+    selectedTab,
+    now,
+    filtered,
+    selected,
+    counts,
+    load,
+    selectRun,
+  }), [counts, error, filtered, load, now, runs, search, selectRun, selected, selectedId, selectedTab]);
 
-  /* ── HUD chrome ─────────────────────────────────────────────────────────── */
-
-  const hud = (
-    <>
-      <NavigationBar
-        title="missionwriter"
-        subtitle="runs · serve"
-        search={{ value: search, onChange: setSearch, placeholder: "Filter runs…" }}
-        actions={
-          <div className="flex items-center gap-1.5">
-            <button
-              type="button"
-              onClick={() => void load()}
-              aria-label="Refresh runs"
-              title="Refresh"
-              className="flex h-7 w-7 items-center justify-center rounded-[2px] border border-border/70 text-muted-foreground transition-colors hover:border-ring/60 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            >
-              <RefreshCw size={13} />
-            </button>
-            <button
-              type="button"
-              onClick={toggleTheme}
-              aria-label="Toggle color theme"
-              title={theme === "dark" ? "Switch to light" : "Switch to dark"}
-              className="flex h-7 w-7 items-center justify-center rounded-[2px] border border-border/70 text-muted-foreground transition-colors hover:border-ring/60 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            >
-              {theme === "dark" ? <Sun size={13} /> : <Moon size={13} />}
-            </button>
-          </div>
-        }
-      />
-
-      <SidePanel
-        side="left"
-        title="Runs"
-        icon={<History size={12} />}
-        width={PANEL_W}
-        footer={
-          <div className="border-t border-[color:var(--hud-chrome-border-subtle)] px-3.5 py-2.5 font-mono text-[10px] text-muted-foreground">
-            {counts.total} {counts.total === 1 ? "run" : "runs"}
-            <span className="text-muted-foreground/40"> · </span>
-            {counts.withDoc} with a document
-          </div>
-        }
-      >
-        {runs === null ? (
-          <div className="px-3.5 py-6 font-mono text-[11px] text-muted-foreground">Loading runs…</div>
-        ) : filtered.length === 0 ? (
-          <div className="px-3.5 py-6 font-mono text-[11px] text-muted-foreground">
-            {runs.length === 0 ? "no runs yet" : "no runs match filter"}
-          </div>
-        ) : (
-          <div className="flex flex-col">
-            {filtered.map((r) => (
-              <RunRow
-                key={r.id}
-                run={r}
-                now={now}
-                selected={selectedId === r.id}
-                onSelect={selectRun}
-              />
-            ))}
-          </div>
-        )}
-      </SidePanel>
-
-      <StatusBar
-        status={statusBarStatus}
-        left={
-          <span className="font-mono text-[10px] tabular-nums text-muted-foreground">
-            {selected ? (
-              <>
-                <span className="text-foreground/85">{selected.shape}</span>
-                <span className="text-muted-foreground/40"> · </span>
-                {selected.id}
-              </>
-            ) : (
-              <>
-                {counts.total} {counts.total === 1 ? "run" : "runs"}
-                {counts.failed > 0 && <span className="text-destructive"> · {counts.failed} failed</span>}
-              </>
-            )}
-          </span>
-        }
-        right={
-          selected ? (
-            <span className="font-mono text-[10px] tabular-nums text-muted-foreground">
-              {selected.writer}/{selected.model || "default"}
-            </span>
-          ) : undefined
-        }
-      />
-    </>
+  return (
+    <MissionwriterContext.Provider value={value}>
+      <MissionwriterAgentProvider>{children}</MissionwriterAgentProvider>
+    </MissionwriterContext.Provider>
   );
+}
 
-  /* ── main content ───────────────────────────────────────────────────────── */
+/* ── Hudson slots ────────────────────────────────────────────────────────── */
 
-  let content: React.ReactNode;
+function MissionwriterContent() {
+  const { error, runs, selected, selectedTab, now, load, selectRun } = useMissionwriterState();
+
+  let content: ReactNode;
   if (error && runs === null) {
     content = (
       <CenteredState>
@@ -536,19 +482,182 @@ export default function RunsViewer() {
     content = (
       <div className="flex h-full flex-col gap-4 p-6 pr-8">
         <MetadataHeader run={selected} now={now} />
-        <DocumentSurface key={selected.id} run={selected} />
+        <DocumentSurface
+          key={selected.id}
+          run={selected}
+          initialTab={selectedTab}
+          onRevisionComplete={runId => {
+            void load();
+            selectRun(runId, "diff");
+          }}
+        />
       </div>
     );
   }
 
   return (
-    <Frame mode="panel" hud={hud} panOffset={{ x: 0, y: 0 }} scale={1} showZoomControls={false}>
-      <div
-        className="box-border h-screen w-full"
-        style={{ paddingTop: NAV_H, paddingBottom: STATUS_H, paddingLeft: PANEL_W }}
-      >
-        <div className="mw-scroll h-full w-full overflow-auto">{content}</div>
+    <div className="mw-scroll min-h-full w-full">{content}</div>
+  );
+}
+
+function MissionwriterLeftPanel() {
+  const { runs, filtered, now, selectedId, selectRun } = useMissionwriterState();
+
+  if (runs === null) {
+    return <div className="px-3.5 py-6 font-mono text-[11px] text-muted-foreground">Loading runs…</div>;
+  }
+  if (filtered.length === 0) {
+    return (
+      <div className="px-3.5 py-6 font-mono text-[11px] text-muted-foreground">
+        {runs.length === 0 ? "no runs yet" : "no runs match filter"}
       </div>
-    </Frame>
+    );
+  }
+  return (
+    <div className="flex flex-col">
+      {filtered.map(run => (
+        <RunRow
+          key={run.id}
+          run={run}
+          now={now}
+          selected={selectedId === run.id}
+          onSelect={id => selectRun(id)}
+        />
+      ))}
+    </div>
+  );
+}
+
+function MissionwriterLeftFooter() {
+  const { counts } = useMissionwriterState();
+  return (
+    <div className="border-t border-[color:var(--hud-chrome-border-subtle)] px-3.5 py-2.5 font-mono text-[10px] text-muted-foreground">
+      {counts.total} {counts.total === 1 ? "run" : "runs"}
+      <span className="text-muted-foreground/40"> · </span>
+      {counts.withDoc} with a document
+    </div>
+  );
+}
+
+function MissionwriterNavActions() {
+  const { load } = useMissionwriterState();
+  const theme = useTheme();
+  const { right } = useAppShellSidePanels();
+  const dark = theme.resolvedTheme !== "light";
+
+  return (
+    <div className="flex items-center gap-1.5">
+      <button
+        type="button"
+        onClick={right.toggle}
+        aria-expanded={!right.isCollapsed}
+        className="flex h-7 items-center gap-1.5 rounded-[2px] border border-border/70 px-2.5 text-[11px] font-medium text-foreground transition-colors hover:border-ring/60 hover:bg-foreground/[0.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      >
+        <Bot size={13} className="text-accent" /> Ask MW
+      </button>
+      <button
+        type="button"
+        onClick={() => void load()}
+        aria-label="Refresh runs"
+        title="Refresh"
+        className="flex h-7 w-7 items-center justify-center rounded-[2px] border border-border/70 text-muted-foreground transition-colors hover:border-ring/60 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      >
+        <RefreshCw size={13} />
+      </button>
+      <button
+        type="button"
+        onClick={() => theme.setTheme(dark ? "light" : "dark")}
+        aria-label="Toggle color theme"
+        title={dark ? "Switch to light" : "Switch to dark"}
+        className="flex h-7 w-7 items-center justify-center rounded-[2px] border border-border/70 text-muted-foreground transition-colors hover:border-ring/60 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      >
+        {dark ? <Sun size={13} /> : <Moon size={13} />}
+      </button>
+    </div>
+  );
+}
+
+/* ── Hudson hooks ────────────────────────────────────────────────────────── */
+
+function useMissionwriterStatus() {
+  const { selected, runs } = useMissionwriterState();
+  return selected
+    ? { label: STATUS_META[selected.status].label.toUpperCase(), color: STATUS_META[selected.status].barColor }
+    : ({ label: runs && runs.length ? "READY" : "IDLE", color: "neutral" } as const);
+}
+
+function useMissionwriterSearch() {
+  const { search, setSearch } = useMissionwriterState();
+  return { value: search, onChange: setSearch, placeholder: "Filter runs…" };
+}
+
+function useMissionwriterStatusLeft() {
+  const { selected, counts } = useMissionwriterState();
+  return (
+    <span className="font-mono text-[10px] tabular-nums text-muted-foreground">
+      {selected ? (
+        <>
+          <span className="text-foreground/85">{selected.shape}</span>
+          <span className="text-muted-foreground/40"> · </span>
+          {selected.id}
+        </>
+      ) : (
+        <>
+          {counts.total} {counts.total === 1 ? "run" : "runs"}
+          {counts.failed > 0 && <span className="text-destructive"> · {counts.failed} failed</span>}
+        </>
+      )}
+    </span>
+  );
+}
+
+function useMissionwriterStatusRight() {
+  const { selected } = useMissionwriterState();
+  return selected ? (
+    <span className="font-mono text-[10px] tabular-nums text-muted-foreground">
+      {selected.writer}/{selected.model || "default"}
+    </span>
+  ) : null;
+}
+
+const missionwriterApp: HudsonApp = {
+  id: "missionwriter",
+  name: "Missionwriter",
+  description: "Review, edit, and revise Missionwriter runs.",
+  icon: <FileText size={14} />,
+  mode: "panel",
+  layout: {
+    rightWidth: 360,
+    right: { collapsed: true, min: 360, max: 520 },
+  },
+  leftPanel: { title: "Runs", icon: <History size={12} /> },
+  rightPanel: { title: "Agent", icon: <Bot size={12} /> },
+  Provider: MissionwriterProvider,
+  slots: {
+    Content: MissionwriterContent,
+    LeftPanel: MissionwriterLeftPanel,
+    LeftFooter: MissionwriterLeftFooter,
+    Inspector: MissionwriterAgentInspector,
+  },
+  hooks: {
+    useCommands: () => [],
+    useStatus: useMissionwriterStatus,
+    useSearch: useMissionwriterSearch,
+    useNavActions: () => <MissionwriterNavActions />,
+    useStatusLeft: useMissionwriterStatusLeft,
+    useStatusRight: useMissionwriterStatusRight,
+  },
+};
+
+export default function RunsViewer() {
+  return (
+    <ThemeProvider storageKey={THEME_STORAGE_KEY} defaultTheme="dark" defaultTemplate="hudson">
+      <AppShell
+        app={missionwriterApp}
+        assistant={false}
+        managedTheme={false}
+        chrome={{ terminal: false, panelBehavior: { exclusive: true } }}
+      />
+    </ThemeProvider>
   );
 }

@@ -1,8 +1,8 @@
 import { readFile } from "node:fs/promises";
 import { isAbsolute, relative, resolve } from "node:path";
 
-import type { ContributorSpec, MissionSpec } from "./mission.js";
-import { defaultModelForProvider, runContributorProvider } from "./providers.js";
+import type { ContributorSpec, MissionSpec } from "./mission";
+import { defaultModelForProvider, runContributorProvider } from "./providers";
 
 export interface ContributorReport {
   contributor: ContributorSpec;

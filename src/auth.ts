@@ -3,7 +3,7 @@ import { spawnSync } from "node:child_process";
 import { homedir } from "node:os";
 import { join } from "node:path";
 
-import type { ProviderId } from "./mission.js";
+import type { ProviderId } from "./mission";
 
 const CURSOR_KEY_FILE = join(homedir(), ".cursor", "api_key.env");
 const PROVIDERS_KEY_FILE = join(homedir(), ".missionwriter", "providers.env");

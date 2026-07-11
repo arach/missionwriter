@@ -1,8 +1,8 @@
 #!/usr/bin/env bun
-import { loadMission } from "../src/mission.js";
-import { runMission } from "../src/runner.js";
-import { runSessionCommand } from "../src/session-cli.js";
-import { printRuns, showRun, serveRuns } from "../src/runs.js";
+import { loadMission } from "../src/mission";
+import { runMission } from "../src/runner";
+import { runSessionCommand } from "../src/session-cli";
+import { printRuns, showRun, serveRuns } from "../src/runs";
 
 function usage(exitCode = 0): never {
   console.error(`Usage:
@@ -16,7 +16,7 @@ Run \`mw session help\` for tmux session management.
 
 Mission file format (frontmatter):
   ---
-  shape: review | write | review-rewrite
+  shape: review | write | review-rewrite | revise
   workdir: ./relative/path        # defaults to dirname(mission file)
   provider: eve                   # optional writer provider, default 'eve' (or 'cursor')
   model: default                  # 'default' inherits pi's configured model

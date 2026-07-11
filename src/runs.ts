@@ -11,7 +11,7 @@ import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawn, spawnSync } from "node:child_process";
 
-import type { MissionSpec, ProviderId } from "./mission.js";
+import type { MissionOrigin, MissionSpec, ProviderId } from "./mission";
 
 const PI_BIN = process.env.PI_BIN ?? "pi";
 
@@ -51,17 +51,19 @@ export interface RunMeta {
   durationMs?: number;
   status: "running" | "finished" | "failed";
   error?: string;
+  origin?: MissionOrigin;
   /** captured output documents (the text), snapshotted before/after under artifacts/ */
   outputs?: RunArtifact[];
 }
 
 export interface RunHandle {
   dir: string;
-  finish(status: "finished" | "failed", error?: string): void;
+  meta: RunMeta;
+  finish(status: "finished" | "failed", error?: string): RunMeta;
 }
 
-function runsRoot(): string {
-  return join(process.cwd(), ".runs");
+export function runsRoot(): string {
+  return process.env.MW_RUNS_DIR ?? join(/* turbopackIgnore: true */ process.cwd(), ".runs");
 }
 
 export function startRun(spec: MissionSpec, writer: ProviderId, model: string): RunHandle {
@@ -102,11 +104,13 @@ export function startRun(spec: MissionSpec, writer: ProviderId, model: string): 
     startedAt: startedAt.toISOString(),
     status: "running",
     ...(outputs.length ? { outputs } : {}),
+    ...(spec.origin ? { origin: spec.origin } : {}),
   };
   writeMeta(dir, meta);
 
   return {
     dir,
+    meta,
     finish(status, error) {
       meta.status = status;
       const endedAt = new Date();
@@ -126,6 +130,7 @@ export function startRun(spec: MissionSpec, writer: ProviderId, model: string): 
         }
       }
       writeMeta(dir, meta);
+      return { ...meta, outputs: meta.outputs?.map(output => ({ ...output })) };
     },
   };
 }
@@ -149,6 +154,21 @@ export function listRuns(): RunMeta[] {
     }
   }
   return runs.sort((a, b) => b.startedAt.localeCompare(a.startedAt));
+}
+
+export function readRun(id: string): RunMeta | null {
+  if (!isSafeRunId(id)) return null;
+  const metaPath = join(runsRoot(), id, "run.json");
+  if (!existsSync(metaPath)) return null;
+  try {
+    return JSON.parse(readFileSync(metaPath, "utf8")) as RunMeta;
+  } catch {
+    return null;
+  }
+}
+
+function isSafeRunId(id: string): boolean {
+  return id.length > 0 && id !== "." && id !== ".." && !id.includes("/") && !id.includes("\\");
 }
 
 /** `mw runs` — one line per run, newest first. */

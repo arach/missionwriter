@@ -1,6 +1,6 @@
 import { spawnSync } from "node:child_process";
 
-import { sendTmuxSlashCommand } from "./tmux-control.js";
+import { sendTmuxSlashCommand } from "./tmux-control";
 import {
   isTmuxSessionAlive,
   killTmuxSession,
@@ -9,7 +9,7 @@ import {
   recordTmuxSessionAction,
   removePersistedTmuxSession,
   resolveTmuxSessionName,
-} from "./tmux-session-registry.js";
+} from "./tmux-session-registry";
 
 const SESSION_HELP = `mw session — manage Mission Writer tmux contributor sessions
 

@@ -1,4 +1,4 @@
-import type { MissionSpec } from "./mission.js";
+import type { MissionSpec } from "./mission";
 
 /**
  * Everything a writer needs to drive one mission. The mission-agnostic

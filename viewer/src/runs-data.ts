@@ -37,6 +37,12 @@ export interface RunMeta {
   durationMs?: number;
   status: "running" | "finished" | "failed";
   error?: string;
+  origin?: {
+    kind: "editor";
+    parentRunId: string;
+    outputIndex: number;
+    outputRel: string;
+  };
   /** captured output documents (the text), snapshotted before/after under artifacts/ */
   outputs?: RunArtifact[];
 }
@@ -97,7 +103,7 @@ export function runsRoot(): string {
     if (parent === dir) break;
     dir = parent;
   }
-  return join(dirname(process.cwd()), ".runs");
+  return join(dirname(/* turbopackIgnore: true */ process.cwd()), ".runs");
 }
 
 /** pi may nest the session under a project slug inside the run dir; newest .jsonl wins. */
@@ -119,6 +125,7 @@ export function findSessionJsonl(dir: string): string | null {
 }
 
 export function readRunMeta(id: string): RunMeta | null {
+  if (!isSafeRunId(id)) return null;
   const p = join(runsRoot(), id, "run.json");
   if (!existsSync(p)) return null;
   try {
@@ -240,6 +247,7 @@ function normalizeMessage(msg: unknown, fallbackTs?: string): SessionTurn | null
 
 /** Parse the newest `.jsonl` in the run dir into an ordered, normalized session. */
 export function readRunSession(id: string): RunSession | null {
+  if (!isSafeRunId(id)) return null;
   const dir = join(runsRoot(), id);
   const jsonl = findSessionJsonl(dir);
   if (!jsonl) return null;
@@ -284,4 +292,8 @@ export function readRunSession(id: string): RunSession | null {
     }
   }
   return session;
+}
+
+function isSafeRunId(id: string): boolean {
+  return id.length > 0 && id !== "." && id !== ".." && !id.includes("/") && !id.includes("\\");
 }

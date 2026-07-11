@@ -1,23 +1,28 @@
-import { formatContributorReports, runContributorReports } from "./contributors.js";
-import type { MissionSpec, ProviderId } from "./mission.js";
-import { buildSystemPrompt } from "./shapes.js";
-import { CursorWriter } from "./cursor-writer.js";
-import { EveWriter } from "./eve-writer.js";
-import { startRun } from "./runs.js";
-import type { Writer } from "./writer.js";
+import { formatContributorReports, runContributorReports } from "./contributors";
+import type { MissionSpec, ProviderId } from "./mission";
+import { buildSystemPrompt } from "./shapes";
+import { CursorWriter } from "./cursor-writer";
+import { EveWriter } from "./eve-writer";
+import { startRun } from "./runs";
+import type { RunMeta } from "./runs";
+import type { Writer } from "./writer";
 import {
   defaultResolvedPolicy,
   finalizeTmuxSessions,
   listTrackedTmuxSessions,
   mergeTmuxPolicy,
   setTmuxDefaultPolicy,
-} from "./tmux-session-registry.js";
+} from "./tmux-session-registry";
 
 const DEFAULT_MODEL = "default";
 
-export async function runMission(spec: MissionSpec): Promise<void> {
+export interface RunMissionOptions {
+  writer?: Writer;
+}
+
+export async function runMission(spec: MissionSpec, options: RunMissionOptions = {}): Promise<RunMeta> {
   const { provider, model } = resolveWriter(spec);
-  const writer = createWriter(provider);
+  const writer = options.writer ?? createWriter(provider);
   const run = startRun(spec, provider, model);
 
   const tmuxPolicy = mergeTmuxPolicy(spec.tmux);
@@ -45,7 +50,7 @@ export async function runMission(spec: MissionSpec): Promise<void> {
       hasContributorReports,
       runDir: run.dir,
     });
-    run.finish("finished");
+    return run.finish("finished");
   } catch (error) {
     run.finish("failed", error instanceof Error ? error.message : String(error));
     throw error;

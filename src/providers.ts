@@ -3,10 +3,10 @@ import { spawn } from "node:child_process";
 import {
   DEFAULT_AGENT_SESSIONS_MODEL,
   runAgentSessionsContributor,
-} from "./agent-sessions.js";
-import { resolveProviderApiKey } from "./auth.js";
-import type { ContributorSpec, MissionSpec, ProviderId } from "./mission.js";
-import { mergeTmuxPolicy } from "./tmux-session-registry.js";
+} from "./agent-sessions";
+import { resolveProviderApiKey } from "./auth";
+import type { ContributorSpec, MissionSpec, ProviderId } from "./mission";
+import { mergeTmuxPolicy } from "./tmux-session-registry";
 
 export interface ContributorProviderRequest {
   contributor: ContributorSpec;

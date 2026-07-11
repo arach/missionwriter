@@ -7,7 +7,7 @@ import {
   isTmuxSessionAlive,
   killTmuxSession,
   listMissionWriterTmuxSessions,
-} from "./tmux-control.js";
+} from "./tmux-control";
 
 export type TmuxMissionEndPolicy = "detach" | "kill" | "keep";
 

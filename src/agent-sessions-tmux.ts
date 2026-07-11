@@ -3,8 +3,8 @@ import { chmod, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { DEFAULT_AGENT_SESSIONS_MODEL } from "./agent-sessions.js";
-import type { AgentSessionsContributorRequest, AgentSessionsContributorResponse } from "./agent-sessions.js";
+import { DEFAULT_AGENT_SESSIONS_MODEL } from "./agent-sessions";
+import type { AgentSessionsContributorRequest, AgentSessionsContributorResponse } from "./agent-sessions";
 import {
   captureTmuxPane,
   isTmuxSessionAlive,
@@ -14,14 +14,14 @@ import {
   TMUX_CAPTURE_LINES,
   waitForTmuxContributorOutput,
   waitForTmuxHarnessReady,
-} from "./tmux-control.js";
+} from "./tmux-control";
 import {
   acquireTmuxSession,
   completeTmuxTurn,
   markTmuxPromptSent,
   markTmuxSessionReady,
   type ResolvedTmuxSessionPolicy,
-} from "./tmux-session-registry.js";
+} from "./tmux-session-registry";
 
 const TURN_TIMEOUT_MS = 600_000;
 const TMUX_COLUMNS = 160;

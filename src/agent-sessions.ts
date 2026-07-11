@@ -7,8 +7,8 @@ import {
   type TurnStatus,
 } from "@openscout/agent-sessions";
 
-import { runAgentSessionsTmuxContributor } from "./agent-sessions-tmux.js";
-import type { ResolvedTmuxSessionPolicy } from "./tmux-session-registry.js";
+import { runAgentSessionsTmuxContributor } from "./agent-sessions-tmux";
+import type { ResolvedTmuxSessionPolicy } from "./tmux-session-registry";
 
 export const DEFAULT_AGENT_SESSIONS_MODEL = "claude-opus-4-8";
 
