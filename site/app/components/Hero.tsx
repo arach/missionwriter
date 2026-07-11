@@ -11,7 +11,7 @@ export function Hero() {
         <p className="mw-kicker mb-6">An agentic Markdown workspace</p>
 
         <h1 className="mw-display text-balance text-[2.6rem] leading-[1.04] text-foreground sm:text-6xl">
-          Give the agent a mission. <span className="italic">Keep the document.</span>
+          Write and revise Markdown with coding agents.
         </h1>
 
         <p className="mx-auto mt-6 max-w-2xl text-[1.05rem] leading-relaxed text-muted-foreground sm:text-lg">
