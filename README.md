@@ -1,100 +1,85 @@
 # missionwriter
 
-A light CLI for running **writing & review missions** with a coding agent.
+Missionwriter is an agentic Markdown workspace for writing, review, and revision.
 
-You write a *mission* — a markdown file with a bit of frontmatter and a brief — and `mw run` hands it to an agent working inside a scoped directory with file tools. The agent reads your inputs, does the work, and writes the outputs.
+It gives coding agents a clear document contract: the brief, workdir, inputs, outputs, writer, and review contributors live in a Markdown mission file. Every run is captured. The resulting document can then be opened in a HudsonKit editor where people and agents revise the same file with exact, selection-level feedback.
 
-The core agent is the **Eve agent** — the [`pi`](https://github.com/earendil-works) coding agent — with an optional [Cursor](https://www.npmjs.com/package/@cursor/sdk) writer and review "contributors" from other LLM providers.
-
-```bash
-mw run examples/ops-control-minimap.mission.md
-```
-
----
-
-## How it works
-
-```
-mission.md ──▶ mw ──▶ writer agent (Eve / pi)  ──▶ files in the workdir
-   (frontmatter        │  scoped to workdir          (draft.md, reviews.md, …)
-    + brief)           │  read · write · edit
-                       └─ optional: contributor reviews gathered first,
-                          then synthesized by the writer
-```
-
-The writer *is* the harness. missionwriter doesn't carry its own agent loop — it parses the mission, assembles the prompt (framing + brief + any contributor reports), and drives the agent. For Eve that's the `pi` coding agent, which brings its own tools, session handling, and provider/model config.
-
----
-
-## Setup
+[Open the landing page](https://arach.github.io/missionwriter/) · [Read the mission format](#mission-file-format)
 
 ```bash
 bun install
+bun link
+mw run examples/ops-control-minimap.mission.md
+mw serve
 ```
 
-### Eve writer (default)
+## What Missionwriter does
 
-Install the `pi` coding agent so it's on your `PATH`:
+Missionwriter has three connected surfaces:
 
-```bash
-npm install -g @earendil-works/pi-coding-agent   # provides the `pi` binary
+- Mission files declare repeatable writing work in Markdown.
+- The runtime coordinates the writer, optional review contributors, file access, and run capture.
+- `mw serve` is a live document workspace for reading diffs, editing Markdown, and asking the original writer to revise with anchored context.
+
+The Markdown file on disk is the shared source of truth. Missionwriter does not hide it behind a proprietary document model, and historical run artifacts stay immutable.
+
+```text
+mission.md ──▶ Missionwriter core ──▶ writer + contributors ──▶ Markdown in the workdir
+                        │                                          ▲
+                        └── immutable runs, transcripts, diffs      │
+                                                                   │
+                                  human edits + anchored notes ─────┘
 ```
 
-`pi` resolves its **own** credentials (`~/.pi/agent/auth.json` or provider env vars), so no missionwriter key is needed for Eve. Its default provider/model come from `~/.pi/agent/settings.json`; override per mission with `writer.model`, which accepts a `provider/id` pattern. Point at a specific binary with `PI_BIN`.
+## The live document workflow
 
-**Pick a real writer.** pi's default is often tuned for code (e.g. `minimax`), which drafts prose poorly. For writing missions, set `writer.model` to a strong prose model — GPT (`openai-codex/gpt-5.5`), Sonnet (`github-copilot/claude-sonnet-4.6`), or Grok. Run `pi --list-models` to see what your current auth actually reaches. The bundled examples default to `openai-codex/gpt-5.5`.
+Run `mw serve` and open a declared Markdown output from any captured run.
 
-### Cursor writer (optional)
+The Document and Diff tabs show the immutable run artifacts. The Live editor opens the real output file in the run's workdir. From there you can:
 
-To use Cursor instead (`writer: { provider: cursor }`), provide a `CURSOR_API_KEY` one of three ways (env wins):
+- edit and preview Markdown through HudsonKit's CodeMirror-backed document surface;
+- save atomically with revision hashes and visible dirty, saving, and conflict states;
+- select exact text and attach one or more in-context notes;
+- ask the original writer and model to revise the document;
+- inspect the revision as a normal Missionwriter run with before/after artifacts and a parent origin.
+
+The agent pane is on demand. Opening it yields the run list instead of turning the workspace into a permanent three-column IDE.
+
+## Quick start
+
+Missionwriter uses Bun.
 
 ```bash
-export CURSOR_API_KEY=...                          # ambient env
-echo 'CURSOR_API_KEY=...' > ~/.missionwriter/providers.env   # shared providers file
-echo 'CURSOR_API_KEY=...' > ~/.cursor/api_key.env  # cursor dotenv
+bun install
+bun link          # optional: puts `mw` on your PATH
 ```
 
-missionwriter also falls back to `secret get NAME`, so keys can live in your keychain.
-
-Optional: `bun link` to put `mw` on your `PATH` globally.
-
----
-
-## Usage
+The default writer is Eve, backed by the [`pi`](https://www.npmjs.com/package/@earendil-works/pi-coding-agent) coding-agent harness. Install `pi` and configure its providers in `~/.pi/agent/`:
 
 ```bash
-bun bin/mw.ts run examples/ops-control-minimap.mission.md
-# or, after `bun link`:
+npm install -g @earendil-works/pi-coding-agent
+```
+
+Then run a mission:
+
+```bash
 mw run path/to/mission.md
+mw runs
+mw serve
 ```
 
-Assistant text streams to **stdout**; tool calls and status go to **stderr**, so you can pipe the prose cleanly:
-
-```bash
-mw run mission.md > draft-log.txt
-```
-
-Manage detached tmux contributor sessions (see [Contributors](#contributors)):
-
-```bash
-mw session list
-mw session attach opus-reviewer --exec
-mw session compact opus-reviewer
-mw session timeline opus-reviewer
-```
-
----
+`PI_BIN` can point Missionwriter at a specific `pi` executable. A mission can override pi's configured model with `writer.model`, using a `provider/id` value such as `openai-codex/gpt-5.5`.
 
 ## Mission file format
 
 ```yaml
 ---
 shape: review | write | review-rewrite | revise
-workdir: ./relative/path        # defaults to the mission file's directory
+workdir: ./relative/path
 writer:
-  provider: eve                 # 'eve' (default) | 'cursor'
-  model: default                # 'default' inherits pi's model; or 'provider/id'
-contributors:                   # optional review voices, gathered before the writer
+  provider: eve
+  model: openai-codex/gpt-5.5
+contributors:
   - id: grok-strategist
     provider: xai
     model: grok-4.3
@@ -102,7 +87,7 @@ contributors:                   # optional review voices, gathered before the wr
   - id: opus-reviewer
     provider: agent-sessions
     model: claude-opus-4-8
-    transport: tmux             # direct (default) | tmux
+    transport: tmux
     role: engineering-docs-review
 inputs:
   - source.md
@@ -114,94 +99,100 @@ budget:
   toolCalls: 30
 ---
 
-Brief: free text describing what to do.
+Brief: Describe the work, the audience, and what a good result should do.
 ```
 
----
+The frontmatter is the execution contract. The body is the writing brief.
+
+## Shapes
+
+- `review` reads the declared inputs and produces a structured critique. Writer file tools are read-only.
+- `write` creates the named outputs from the brief and inputs.
+- `review-rewrite` gathers review findings, records them, and produces a rewritten draft.
+- `revise` edits one Markdown document in place. The live workspace uses this shape for focused human-agent revision.
 
 ## Writers
 
-The writer runs the core agent loop — it spawns the agent, gives it file tools scoped to the workdir, and streams output. Select it with `writer.provider` (or the top-level `provider`).
+The shared runtime is not tied to one SDK. A writer adapter launches the selected agent in the declared workdir and streams the run back through Missionwriter.
 
-| Writer | Backend | Auth | Notes |
+| Writer | Backend | Authentication | Notes |
 | --- | --- | --- | --- |
-| **`eve`** (default) | `pi` coding agent | pi's own (`~/.pi/agent/auth.json`) | Runs host-scoped in the workdir. `review` shape → read-only tools. Model from pi's settings unless overridden. |
-| **`cursor`** | `@cursor/sdk` | `CURSOR_API_KEY` | For `review-rewrite` with no contributors, fans out Cursor's native reviewer subagents. |
+| `eve` (default) | `pi` coding-agent harness | pi's provider configuration | Host-scoped tools, sessions, and model selection. Review missions use read-only tools. |
+| `cursor` | `@cursor/sdk` | `CURSOR_API_KEY` | Optional adapter. Can use Cursor-native reviewer subagents for `review-rewrite`. |
 
-### Enable Eve subagents (optional)
+For Cursor, provide `CURSOR_API_KEY` through the environment, `~/.missionwriter/providers.env`, `~/.cursor/api_key.env`, or a compatible `secret get` keychain command.
 
-For `review-rewrite`, the Eve writer can fan out review voices through pi's `subagent` tool instead of reviewing inline. Two one-time steps:
+### Eve subagents
 
-```bash
-# 1. install pi's subagent extension (ships with pi; auto-discovered)
-PI=$(dirname "$(dirname "$(readlink -f "$(command -v pi)")")")
-ln -sfn "$PI/examples/extensions/subagent" ~/.pi/agent/extensions/subagent
-
-# 2. install the demo reviewer agents (or write your own)
-cp examples/agents/*.md ~/.pi/agent/agents/
-```
-
-Then name the reviewers in the mission — the core doesn't hard-code them:
+Eve can fan out `review-rewrite` work through pi's `subagent` extension. Install the extension and provide reviewer definitions under `~/.pi/agent/agents/`, then name them in the mission:
 
 ```yaml
 writer:
   provider: eve
-  reviewers: [editorial, strategic, technical]   # agents in ~/.pi/agent/agents
+  reviewers: [editorial, strategic, technical]
 ```
 
-The writer makes one parallel `subagent` call over those agents, consolidates their reports into the review output, then rewrites. Demo definitions live in [`examples/agents/`](examples/agents). If you omit `reviewers`, Eve reviews inline. `contributors` (below) is the writer-agnostic alternative and works with Cursor too.
-
----
-
-## Shapes
-
-- **`review`** — read inputs, produce a structured critique. No rewriting (read-only tools).
-- **`write`** — synthesize the brief into the named output file(s).
-- **`review-rewrite`** — review the inputs, consolidate findings into `reviews.md`, then produce a rewritten `draft.md`.
-- **`revise`** — edit one named Markdown document in place. This is the focused shape used by the live editor and can also be declared in a mission file.
-
----
+Example reviewer definitions live in [`examples/agents/`](examples/agents).
 
 ## Contributors
 
-Contributors are review voices that run **before** the writer. They receive the brief and listed inputs, return markdown reports, and don't edit files — the writer then synthesizes their reports into the outputs.
+Contributors are independent review voices that run before the writer. They receive the brief and declared inputs, return Markdown reports, and cannot edit the workdir. The writer gets those reports as additional context.
 
-| Provider | Default model | Key |
+| Provider | Default model | Authentication |
 | --- | --- | --- |
 | `xai` | `grok-4.3` | `XAI_API_KEY` |
 | `openrouter` | `openrouter/auto` | `OPENROUTER_API_KEY` |
 | `minimax` | `MiniMax-M3` | `MINIMAX_API_KEY` |
-| `agent-sessions` | `claude-opus-4-8` | needs `claude` on `PATH` |
+| `agent-sessions` | `claude-opus-4-8` | local agent executable |
 | `copilot-cli` | `gemini-3.1-pro-preview` | local `copilot-ask` bridge |
 
-`agent-sessions` supports two transports:
+Built-in contributor roles include `editorial-review`, `strategic-review`, `technical-precision`, `engineering-docs-review`, and `fresh-context-research`. A contributor can also supply a custom prompt.
 
-- **`direct`** (default) — ephemeral subprocess via [`@openscout/agent-sessions`](https://www.npmjs.com/package/@openscout/agent-sessions).
-- **`transport: tmux`** — a persistent tmux pane with Claude Code, reused across turns in a run. Sessions **detach on mission end** by default (attach with `tmux attach -t mw-<id>`) and self-kill after 30m idle. Tune with a mission-level or per-contributor `tmux:` block (`idleTimeoutMs`, `onMissionEnd: detach | kill | keep`), and manage them with `mw session` (`list`, `attach`, `compact`, `clear`, `kill`, `timeline`).
-
-Built-in roles: `editorial-review`, `strategic-review`, `technical-precision`, `engineering-docs-review`, `fresh-context-research`. Or give any contributor a custom `prompt`.
-
----
-
-## Runs
-
-Every `mw run` records a run under `.runs/<timestamp>__<shape>/` (gitignored):
-
-- `run.json` — mission, shape, writer, model, timing, status (missionwriter's thin index).
-- the Eve session transcript (`.jsonl`) — captured via pi's `--session-dir`.
+`agent-sessions` supports ephemeral direct processes and persistent tmux transports. Persistent sessions can be listed, attached, compacted, cleared, or killed through `mw session`:
 
 ```bash
-mw runs            # list past runs, newest first
-mw show            # render the latest run's Eve session to HTML and open it
-mw show <run-id>   # a specific run
+mw session list
+mw session attach opus-reviewer --exec
+mw session compact opus-reviewer
+mw session timeline opus-reviewer
 ```
 
-`mw show` leans on Eve's own visibility: it renders the captured session with `pi --export`. missionwriter keeps the index; Eve provides the deep view.
+## Runs and provenance
 
-`mw serve` also lets you open a run's declared Markdown output as a live HudsonKit document. The editor reads and saves the real workdir file with revision checks; the **Ask MW** side pane accepts overall direction plus exact selection notes, runs an in-place `revise` mission, and returns a normal captured before/after diff. Historical run artifacts remain unchanged.
+Every run is stored under `.runs/<timestamp>__<shape>/` by default. Set `MW_RUNS_DIR` to use another root store.
 
-## Notes
+A run records:
 
-- The workdir is the sandbox: the agent's file tools are scoped to it. Stay inside; don't touch files outside the declared inputs/outputs.
-- `budget` (tokens / tool calls) is advisory framing passed to the agent, not a hard enforced cap.
-- Run artifacts land under `.runs/` (gitignored).
+- the resolved mission, writer, model, timing, and status;
+- immutable before and after copies of declared outputs;
+- the agent session transcript when the writer provides one;
+- the parent run and output origin for revisions launched from the editor.
+
+```bash
+mw runs
+mw show
+mw show <run-id>
+mw serve [port]
+```
+
+`mw show` renders the captured Eve session through pi. `mw serve` provides the complete run browser, document, diff, transcript, live editor, and agent revision workflow.
+
+## Safety model
+
+- The workdir bounds the mission's file access.
+- The live API resolves only outputs declared in the run metadata.
+- Live editing accepts Markdown extensions, enforces a 4 MiB limit, rejects traversal and escaping symlinks, and uses atomic writes.
+- Saves and agent revisions require the current content revision. Stale callers receive a conflict instead of overwriting newer work.
+- `budget` values are framing for the agent, not hard runtime limits.
+
+## Landing page
+
+The landing page lives in [`site/`](site/) and is statically generated for GitHub Pages.
+
+```bash
+bun run site:dev
+bun run site:typecheck
+bun run site:build
+```
+
+Pushes to `main` that change the site or its build configuration publish `site/out` to [arach.github.io/missionwriter](https://arach.github.io/missionwriter/).

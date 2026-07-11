@@ -1,7 +1,7 @@
 {
   "name": "missionwriter",
   "version": "0.1.0",
-  "description": "Lightweight CLI for running writing & review missions on top of @cursor/sdk.",
+  "description": "Agentic Markdown workspace for traceable writing, review, and revision runs.",
   "type": "module",
   "private": true,
   "bin": {
@@ -9,7 +9,10 @@
   },
   "scripts": {
     "mw": "bun bin/mw.ts",
-    "serve": "bun bin/mw.ts serve"
+    "serve": "bun bin/mw.ts serve",
+    "site:dev": "bun --cwd site dev",
+    "site:typecheck": "bun --cwd site typecheck",
+    "site:build": "bun --cwd site build"
   },
   "dependencies": {
     "@cursor/sdk": "^1.0.13",
