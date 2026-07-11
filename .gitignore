@@ -15,3 +15,10 @@ viewer/node_modules/
 viewer/.next/
 viewer/next-env.d.ts
 viewer/*.tsbuildinfo
+
+# Next.js marketing site (HudsonKit app) — build + deps only; source is tracked
+site/node_modules/
+site/.next/
+site/out/
+site/next-env.d.ts
+site/*.tsbuildinfo
