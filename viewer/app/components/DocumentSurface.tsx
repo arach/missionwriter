@@ -1,17 +1,18 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { AlertTriangle, FileText, GitCompareArrows, ScrollText } from "lucide-react";
+import { AlertTriangle, FilePenLine, FileText, GitCompareArrows, ScrollText } from "lucide-react";
 import type { RunDocument, RunSession, RunView } from "@/src/runs-data";
 import { Prose } from "./Prose";
 import { LineDiffView } from "./LineDiffView";
 import { Transcript } from "./Transcript";
+import { LiveDocumentEditor } from "./LiveDocumentEditor";
 
 function cx(...parts: Array<string | false | null | undefined>): string {
   return parts.filter(Boolean).join(" ");
 }
 
-type Tab = "document" | "diff" | "transcript";
+export type DocumentTab = "document" | "diff" | "live" | "transcript";
 
 interface DocResponse {
   outputs: RunDocument[];
@@ -22,17 +23,25 @@ interface DocResponse {
  * editorial prose (default), a before→after diff when a "before" existed, and
  * the native Eve transcript as the supporting "how it was made" view.
  */
-export function DocumentSurface({ run }: { run: RunView }) {
+export function DocumentSurface({
+  run,
+  initialTab,
+  onRevisionComplete,
+}: {
+  run: RunView;
+  initialTab?: DocumentTab;
+  onRevisionComplete: (runId: string) => void;
+}) {
   const [doc, setDoc] = useState<DocResponse | null | undefined>(undefined);
   const [session, setSession] = useState<RunSession | null | undefined>(undefined);
-  const [userTab, setUserTab] = useState<Tab | null>(null);
+  const [userTab, setUserTab] = useState<DocumentTab | null>(initialTab ?? null);
   const [outputIdx, setOutputIdx] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
     setDoc(undefined);
     setSession(undefined);
-    setUserTab(null);
+    setUserTab(initialTab ?? null);
     setOutputIdx(0);
 
     void (async () => {
@@ -61,7 +70,7 @@ export function DocumentSurface({ run }: { run: RunView }) {
     return () => {
       cancelled = true;
     };
-  }, [run.id, run.hasSession]);
+  }, [initialTab, run.id, run.hasSession]);
 
   const loading = doc === undefined || (run.hasSession && session === undefined);
 
@@ -72,13 +81,15 @@ export function DocumentSurface({ run }: { run: RunView }) {
   const diffAvailable =
     !!current && current.hadBefore && current.before != null && current.after != null && current.before !== current.after;
 
-  const available: Tab[] = [];
+  const liveAvailable = !!current && /\.(md|mdx|markdown)$/i.test(current.rel) && current.after != null;
+  const available: DocumentTab[] = [];
   if (hasAnyDoc) available.push("document");
   if (diffAvailable) available.push("diff");
+  if (liveAvailable) available.push("live");
   if (run.hasSession && (session?.turns.length ?? 0) > 0) available.push("transcript");
 
-  const defaultTab: Tab = hasAnyDoc ? "document" : "transcript";
-  const activeTab: Tab | undefined =
+  const defaultTab: DocumentTab = hasAnyDoc ? "document" : "transcript";
+  const activeTab: DocumentTab | undefined =
     userTab && available.includes(userTab) ? userTab : available.includes(defaultTab) ? defaultTab : available[0];
 
   if (loading) {
@@ -124,6 +135,13 @@ export function DocumentSurface({ run }: { run: RunView }) {
             label="Diff"
           />
           <TabButton
+            active={activeTab === "live"}
+            show={available.includes("live")}
+            onClick={() => setUserTab("live")}
+            icon={<FilePenLine size={13} />}
+            label="Live editor"
+          />
+          <TabButton
             active={activeTab === "transcript"}
             show={available.includes("transcript")}
             onClick={() => setUserTab("transcript")}
@@ -132,10 +150,15 @@ export function DocumentSurface({ run }: { run: RunView }) {
             muted
           />
         </div>
-        {current && (activeTab === "document" || activeTab === "diff") && (
+        {current && (activeTab === "document" || activeTab === "diff" || activeTab === "live") && (
           <div className="flex items-center gap-2 pb-1.5 pr-1 font-mono text-[10px] tabular-nums text-muted-foreground/70">
             <span className="text-foreground/70">{current.name}</span>
             {current.after != null && <span>· {current.after.length.toLocaleString()} chars</span>}
+            {liveAvailable && activeTab !== "live" && (
+              <button type="button" onClick={() => setUserTab("live")} className="ml-1 rounded border border-border/70 px-2 py-0.5 text-foreground hover:border-ring/50">
+                Open live document
+              </button>
+            )}
           </div>
         )}
       </div>
@@ -174,6 +197,17 @@ export function DocumentSurface({ run }: { run: RunView }) {
         {activeTab === "diff" && current?.before != null && current?.after != null && (
           <div className="flex min-h-0 flex-1">
             <LineDiffView before={current.before} after={current.after} title={current.name} />
+          </div>
+        )}
+
+        {liveAvailable && current && (
+          <div className={activeTab === "live" ? "block" : "hidden"}>
+            <LiveDocumentEditor
+              key={`${run.id}:${outputIdx}`}
+              run={run}
+              outputIndex={outputIdx}
+              onRevisionComplete={onRevisionComplete}
+            />
           </div>
         )}
 

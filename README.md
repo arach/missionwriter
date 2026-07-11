@@ -89,7 +89,7 @@ mw session timeline opus-reviewer
 
 ```yaml
 ---
-shape: review | write | review-rewrite
+shape: review | write | review-rewrite | revise
 workdir: ./relative/path        # defaults to the mission file's directory
 writer:
   provider: eve                 # 'eve' (default) | 'cursor'
@@ -158,6 +158,7 @@ The writer makes one parallel `subagent` call over those agents, consolidates th
 - **`review`** — read inputs, produce a structured critique. No rewriting (read-only tools).
 - **`write`** — synthesize the brief into the named output file(s).
 - **`review-rewrite`** — review the inputs, consolidate findings into `reviews.md`, then produce a rewritten `draft.md`.
+- **`revise`** — edit one named Markdown document in place. This is the focused shape used by the live editor and can also be declared in a mission file.
 
 ---
 
@@ -196,6 +197,8 @@ mw show <run-id>   # a specific run
 ```
 
 `mw show` leans on Eve's own visibility: it renders the captured session with `pi --export`. missionwriter keeps the index; Eve provides the deep view.
+
+`mw serve` also lets you open a run's declared Markdown output as a live HudsonKit document. The editor reads and saves the real workdir file with revision checks; the **Ask MW** side pane accepts overall direction plus exact selection notes, runs an in-place `revise` mission, and returns a normal captured before/after diff. Historical run artifacts remain unchanged.
 
 ## Notes
 

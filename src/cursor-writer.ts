@@ -1,8 +1,8 @@
 import { Agent } from "@cursor/sdk";
 import type { AgentDefinition, AgentOptions } from "@cursor/sdk";
 
-import { resolveProviderApiKey } from "./auth.js";
-import type { MissionWriterContext, Writer } from "./writer.js";
+import { resolveProviderApiKey } from "./auth";
+import type { MissionWriterContext, Writer } from "./writer";
 
 /**
  * Cursor Agent SDK writer: spawns a Cursor agent scoped to the workdir with its

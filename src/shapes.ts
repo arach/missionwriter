@@ -1,4 +1,4 @@
-import type { MissionShape, MissionSpec, ProviderId } from "./mission.js";
+import type { MissionShape, MissionSpec, ProviderId } from "./mission";
 
 export interface BuildSystemPromptOptions {
   hasContributorReports?: boolean;
@@ -26,6 +26,12 @@ Two-phase mission:
      Consolidate their reports into reviews.md.
   2. Produce a rewritten draft applying the consensus fixes. Save as draft.md or the named output.
 Preserve any YAML frontmatter on input files exactly when rewriting.`,
+
+  revise: `MISSION SHAPE: revise
+Revise the single named Markdown document in place according to the brief.
+The same path is listed as both input and output: read it first, then edit that file directly.
+Do not create review reports or modify any other file.
+Preserve YAML frontmatter exactly unless the brief explicitly asks to change it.`,
 };
 
 const CONTRIBUTOR_REPORT_INSTRUCTIONS: Partial<Record<MissionShape, string>> = {

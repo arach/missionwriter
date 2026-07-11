@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { parse as parseYaml } from "yaml";
 
-export type MissionShape = "review" | "write" | "review-rewrite";
+export type MissionShape = "review" | "write" | "review-rewrite" | "revise";
 export type ProviderId = "eve" | "cursor" | "xai" | "openrouter" | "minimax" | "copilot-cli" | "agent-sessions";
 export type ContributorWeight = "primary" | "secondary" | "fallback";
 export type AgentSessionTransport = "direct" | "tmux";
@@ -32,6 +32,13 @@ export interface MissionWriterSpec {
   reviewers?: string[];
 }
 
+export interface MissionOrigin {
+  kind: "editor";
+  parentRunId: string;
+  outputIndex: number;
+  outputRel: string;
+}
+
 export interface MissionSpec {
   shape: MissionShape;
   brief: string;
@@ -44,6 +51,7 @@ export interface MissionSpec {
   budget?: { tokens?: number; toolCalls?: number };
   inputs?: string[];
   outputs?: string[];
+  origin?: MissionOrigin;
   source: string;
 }
 
@@ -65,8 +73,8 @@ export function loadMission(path: string): MissionSpec {
   }
 
   const shape = fm.shape as MissionShape | undefined;
-  if (shape !== "review" && shape !== "write" && shape !== "review-rewrite") {
-    throw new Error(`mission shape must be 'review' | 'write' | 'review-rewrite' (got ${String(shape)})`);
+  if (shape !== "review" && shape !== "write" && shape !== "review-rewrite" && shape !== "revise") {
+    throw new Error(`mission shape must be 'review' | 'write' | 'review-rewrite' | 'revise' (got ${String(shape)})`);
   }
 
   const workdir = typeof fm.workdir === "string"
@@ -85,8 +93,24 @@ export function loadMission(path: string): MissionSpec {
     budget: (fm.budget as MissionSpec["budget"]) ?? undefined,
     inputs: Array.isArray(fm.inputs) ? fm.inputs.map(String) : undefined,
     outputs: Array.isArray(fm.outputs) ? fm.outputs.map(String) : undefined,
+    origin: parseOrigin(fm.origin),
     source: absolute,
   };
+}
+
+function parseOrigin(value: unknown): MissionOrigin | undefined {
+  if (value === undefined || value === null) return undefined;
+  if (typeof value !== "object" || Array.isArray(value)) {
+    throw new Error("mission origin must be an object when provided");
+  }
+  const raw = value as Record<string, unknown>;
+  if (raw.kind !== "editor") throw new Error("mission origin.kind must be 'editor'");
+  const parentRunId = requireString(raw.parentRunId, "origin.parentRunId");
+  const outputRel = requireString(raw.outputRel, "origin.outputRel");
+  if (typeof raw.outputIndex !== "number" || !Number.isInteger(raw.outputIndex) || raw.outputIndex < 0) {
+    throw new Error("mission origin.outputIndex must be a non-negative integer");
+  }
+  return { kind: "editor", parentRunId, outputIndex: raw.outputIndex, outputRel };
 }
 
 function parseWriter(value: unknown): MissionWriterSpec | undefined {

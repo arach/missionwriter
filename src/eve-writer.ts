@@ -1,6 +1,6 @@
 import { spawn } from "node:child_process";
 
-import type { MissionWriterContext, Writer } from "./writer.js";
+import type { MissionWriterContext, Writer } from "./writer";
 
 const PI_BIN = process.env.PI_BIN ?? "pi";
 const DEFAULT_MODEL_SENTINEL = "default";
