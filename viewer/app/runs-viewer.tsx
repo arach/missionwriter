@@ -23,6 +23,7 @@ import {
   Sun,
 } from "lucide-react";
 import type { RunView } from "@/src/runs-data";
+import { viewerApiPaths } from "@/src/api-paths";
 import { basename, editorialTitle, formatAbsolute, humanDuration, relativeTime } from "@/src/format";
 import { DocumentSurface, type DocumentTab } from "./components/DocumentSurface";
 import { MissionwriterAgentInspector, MissionwriterAgentProvider } from "./components/MissionwriterAgent";
@@ -32,9 +33,11 @@ import { THEME_STORAGE_KEY } from "./theme-key";
 function runHasDocument(run: RunView): boolean {
   return run.outputs?.some((o) => o.bytesAfter != null) ?? false;
 }
-/** A run is worth opening when it has a document to show OR a session to render. */
-function runHasContent(run: RunView): boolean {
-  return run.hasSession || runHasDocument(run);
+function currentRunDuration(run: RunView, now: number): number | undefined {
+  if (run.durationMs != null) return run.durationMs;
+  if (run.status !== "running") return undefined;
+  const started = Date.parse(run.startedAt);
+  return Number.isFinite(started) ? Math.max(0, now - started) : undefined;
 }
 
 type Status = RunView["status"];
@@ -124,25 +127,21 @@ function RunRow({
   now: number;
   onSelect: (id: string) => void;
 }) {
-  const selectable = runHasContent(run);
   const hasDoc = runHasDocument(run);
   const hasDiff = run.outputs?.some((o) => o.hadBefore) ?? false;
 
   return (
     <button
       type="button"
-      onClick={() => selectable && onSelect(run.id)}
+      onClick={() => onSelect(run.id)}
       aria-current={selected ? "true" : undefined}
-      aria-disabled={!selectable}
-      title={selectable ? run.mission : "nothing captured for this run"}
+      title={run.mission}
       className={cx(
         "group relative block w-full border-b px-3.5 py-3 text-left transition-colors",
         "border-[color:var(--hud-chrome-border-subtle)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring focus-visible:ring-inset",
         selected
           ? "bg-foreground/[0.055]"
-          : selectable
-            ? "hover:bg-foreground/[0.03] cursor-pointer"
-            : "opacity-45 cursor-default",
+          : "hover:bg-foreground/[0.03] cursor-pointer",
       )}
     >
       <span
@@ -180,15 +179,9 @@ function RunRow({
               {hasDiff && <GitCompareArrows size={11} className="opacity-70" />}
             </span>
           )}
-          {selectable ? (
-            <span className="font-mono text-[10.5px] tabular-nums text-muted-foreground/80">
-              {humanDuration(run.durationMs)}
-            </span>
-          ) : (
-            <span className="rounded-[2px] bg-muted/40 px-1 py-px font-mono text-[9px] uppercase tracking-wide text-muted-foreground/70">
-              empty
-            </span>
-          )}
+          <span className="font-mono text-[10.5px] tabular-nums text-muted-foreground/80">
+            {humanDuration(currentRunDuration(run, now))}
+          </span>
         </div>
       </div>
     </button>
@@ -209,6 +202,7 @@ function MetaField({ label, children, mono }: { label: string; children: React.R
 }
 
 function MetadataHeader({ run, now }: { run: RunView; now: number }) {
+  const duration = currentRunDuration(run, now);
   return (
     <header className="shrink-0 rounded-[3px] border border-border/70 bg-card/30 px-8 py-7">
       <div className="flex items-center gap-2.5 text-[10px] font-medium uppercase tracking-[0.2em]">
@@ -231,7 +225,7 @@ function MetadataHeader({ run, now }: { run: RunView; now: number }) {
           {run.startedAt ? formatAbsolute(run.startedAt) : "—"}
         </span>
         <span className="text-muted-foreground/30">·</span>
-        <span className="font-mono text-[11px] tabular-nums">{humanDuration(run.durationMs)}</span>
+        <span className="font-mono text-[11px] tabular-nums">{humanDuration(duration)}</span>
       </p>
 
       {run.status === "failed" && (
@@ -243,6 +237,16 @@ function MetadataHeader({ run, now }: { run: RunView; now: number }) {
           <pre className="mt-2 whitespace-pre-wrap break-words font-mono text-[12px] leading-relaxed text-destructive/90">
             {run.error || "run ended in a failed state"}
           </pre>
+        </div>
+      )}
+
+      {run.status === "running" && (
+        <div className="mt-5 flex items-center gap-2 rounded-[3px] border border-warning/25 bg-warning/[0.05] px-3.5 py-2.5 font-mono text-[10.5px] text-warning/85">
+          <span className="relative inline-flex h-1.5 w-1.5">
+            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-warning opacity-60" />
+            <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-warning" />
+          </span>
+          Live run · brief, agent activity, and emerging documents refresh automatically
         </div>
       )}
 
@@ -262,7 +266,7 @@ function MetadataHeader({ run, now }: { run: RunView; now: number }) {
           {run.startedAt ? formatAbsolute(run.startedAt) : "—"}
         </MetaField>
         <MetaField label="Duration" mono>
-          {humanDuration(run.durationMs)}
+          {humanDuration(duration)}
         </MetaField>
         {run.endedAt ? (
           <MetaField label="Ended" mono>
@@ -337,14 +341,14 @@ function MissionwriterProvider({ children }: { children: ReactNode }) {
   const [selectedId, setSelectedId] = useState<string | null>(() => searchParams.get("run"));
   const [selectedTab, setSelectedTab] = useState<DocumentTab | undefined>(() => {
     const tab = searchParams.get("tab");
-    return tab === "document" || tab === "diff" || tab === "live" || tab === "transcript" ? tab : undefined;
+    return tab === "brief" || tab === "document" || tab === "diff" || tab === "live" || tab === "transcript" ? tab : undefined;
   });
   const [now, setNow] = useState(() => Date.now());
 
   /* poll the run index (cheap json reads) */
   const load = useCallback(async () => {
     try {
-      const res = await fetch("/api/runs", { cache: "no-store" });
+      const res = await fetch(viewerApiPaths.runs, { cache: "no-store" });
       if (!res.ok) throw new Error(`GET /api/runs → ${res.status}`);
       setRuns((await res.json()) as RunView[]);
       setError(null);
@@ -375,13 +379,13 @@ function MissionwriterProvider({ children }: { children: ReactNode }) {
     window.history.replaceState(null, "", u);
   }, []);
 
-  /* auto-select the newest run with a transcript once loaded */
+  /* auto-select the newest run once loaded, including runs still starting */
   useEffect(() => {
     if (!runs || runs.length === 0) return;
     const exists = selectedId && runs.some((r) => r.id === selectedId);
     if (exists) return;
-    const firstSelectable = runs.find(runHasContent);
-    if (firstSelectable) selectRun(firstSelectable.id);
+    const newest = runs[0];
+    if (newest) selectRun(newest.id);
   }, [runs, selectedId, selectRun]);
 
   const filtered = useMemo(() => {

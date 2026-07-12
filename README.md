@@ -163,7 +163,8 @@ Every run is stored under `.runs/<timestamp>__<shape>/` by default. Set `MW_RUNS
 
 A run records:
 
-- the resolved mission, writer, model, timing, and status;
+- an immutable Markdown copy of the resolved starting brief, captured before agent work begins;
+- the mission source, writer, model, timing, and status;
 - immutable before and after copies of declared outputs;
 - the agent session transcript when the writer provides one;
 - the parent run and output origin for revisions launched from the editor.
@@ -175,7 +176,7 @@ mw show <run-id>
 mw serve [port]
 ```
 
-`mw show` renders the captured Eve session through pi. `mw serve` provides the complete run browser, document, diff, transcript, live editor, and agent revision workflow.
+`mw show` renders the captured Eve session through pi. `mw serve` provides the complete run browser, immutable brief and output views, diff, live editor, transcript, and agent revision workflow. Running missions appear immediately; their activity and emerging documents refresh in place until completion.
 
 ## Safety model
 

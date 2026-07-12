@@ -61,6 +61,9 @@ export interface RunDocument {
   before: string | null;
 }
 
+/** The resolved Markdown brief captured before the writer started. */
+export type RunBrief = string | null;
+
 /* ── session (native transcript) types ─────────────────────────────────────── */
 
 export type SessionBlock =
@@ -171,6 +174,14 @@ function readTextFile(p: string): string | null {
   } catch {
     return null;
   }
+}
+
+/** Read the immutable starting brief captured for a run. Older runs return null. */
+export function readRunBrief(id: string): RunBrief {
+  if (!isSafeRunId(id)) return null;
+  const brief = readTextFile(join(runsRoot(), id, "brief.md"));
+  if (brief == null || Buffer.byteLength(brief, "utf8") > MAX_TEXT_BYTES) return null;
+  return brief;
 }
 
 /**
