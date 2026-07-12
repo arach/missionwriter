@@ -41,10 +41,6 @@ export function DocumentSurface({
 
   useEffect(() => {
     let cancelled = false;
-    setDoc(undefined);
-    setSession(undefined);
-    setUserTab(initialTab ?? null);
-    setOutputIdx(0);
 
     const loadDocument = async () => {
       try {
@@ -74,7 +70,7 @@ export function DocumentSurface({
       cancelled = true;
       if (timer != null) window.clearInterval(timer);
     };
-  }, [initialTab, run.id, run.status]);
+  }, [run.id, run.status]);
 
   const loading = doc === undefined || session === undefined;
 
