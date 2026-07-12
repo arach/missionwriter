@@ -72,6 +72,12 @@ export function startRun(spec: MissionSpec, writer: ProviderId, model: string): 
   const dir = join(runsRoot(), id);
   mkdirSync(dir, { recursive: true });
 
+  // Capture the resolved brief before any agent work begins. The source mission
+  // may later move or change (and editor revisions can be synthesized in
+  // memory), so the run-local Markdown is the durable account of what this
+  // particular run was asked to do.
+  writeFileSync(join(dir, "brief.md"), `${spec.brief.replace(/\s+$/, "")}\n`);
+
   // Snapshot the "before" state of each declared output (the text as it stood
   // when the run started), so a rewrite/edit can be shown as a diff.
   const artifactsDir = join(dir, "artifacts");

@@ -49,6 +49,7 @@ describe("revise runs", () => {
 
     expect(run.status).toBe("finished");
     expect(run.origin).toEqual(spec.origin);
+    expect(readFileSync(join(runsDir, run.id, "brief.md"), "utf8")).toBe("Make the title concrete.\n");
     expect(readFileSync(join(artifacts, "before__draft.md"), "utf8")).toBe("# Before\n");
     expect(readFileSync(join(artifacts, "after__draft.md"), "utf8")).toBe("# After\n");
     expect(readFileSync(join(workdir, "draft.md"), "utf8")).toBe("# After\n");

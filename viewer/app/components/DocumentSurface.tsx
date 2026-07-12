@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { AlertTriangle, FilePenLine, FileText, GitCompareArrows, ScrollText } from "lucide-react";
+import { AlertTriangle, FilePenLine, FileText, GitCompareArrows, MessageSquareQuote, ScrollText } from "lucide-react";
+import { viewerApiPaths } from "@/src/api-paths";
 import type { RunDocument, RunSession, RunView } from "@/src/runs-data";
 import { Prose } from "./Prose";
 import { LineDiffView } from "./LineDiffView";
@@ -12,9 +13,10 @@ function cx(...parts: Array<string | false | null | undefined>): string {
   return parts.filter(Boolean).join(" ");
 }
 
-export type DocumentTab = "document" | "diff" | "live" | "transcript";
+export type DocumentTab = "brief" | "document" | "diff" | "live" | "transcript";
 
 interface DocResponse {
+  brief: string | null;
   outputs: RunDocument[];
 }
 
@@ -44,36 +46,39 @@ export function DocumentSurface({
     setUserTab(initialTab ?? null);
     setOutputIdx(0);
 
-    void (async () => {
+    const loadDocument = async () => {
       try {
-        const res = await fetch(`/api/runs/${encodeURIComponent(run.id)}/document`, { cache: "no-store" });
+        const res = await fetch(viewerApiPaths.runDocument(run.id), { cache: "no-store" });
         const data = (await res.json()) as DocResponse;
-        if (!cancelled) setDoc(res.ok ? data : { outputs: [] });
+        if (!cancelled) setDoc(res.ok ? data : { brief: null, outputs: [] });
       } catch {
         if (!cancelled) setDoc(null);
       }
-    })();
+    };
 
-    if (run.hasSession) {
-      void (async () => {
-        try {
-          const res = await fetch(`/api/runs/${encodeURIComponent(run.id)}/session`, { cache: "no-store" });
-          if (!cancelled) setSession(res.ok ? ((await res.json()) as RunSession) : null);
-        } catch {
-          if (!cancelled) setSession(null);
-        }
-      })();
-    } else {
-      setSession(null);
-    }
+    const loadSession = async () => {
+      try {
+        const res = await fetch(viewerApiPaths.runSession(run.id), { cache: "no-store" });
+        if (!cancelled) setSession(res.ok ? ((await res.json()) as RunSession) : null);
+      } catch {
+        if (!cancelled) setSession(null);
+      }
+    };
+
+    void Promise.all([loadDocument(), loadSession()]);
+    const timer = run.status === "running"
+      ? window.setInterval(() => void Promise.all([loadDocument(), loadSession()]), 2_000)
+      : null;
 
     return () => {
       cancelled = true;
+      if (timer != null) window.clearInterval(timer);
     };
-  }, [initialTab, run.id, run.hasSession]);
+  }, [initialTab, run.id, run.status]);
 
-  const loading = doc === undefined || (run.hasSession && session === undefined);
+  const loading = doc === undefined || session === undefined;
 
+  const brief = doc?.brief ?? null;
   const outputs = doc?.outputs ?? [];
   const current = outputs[Math.min(outputIdx, Math.max(0, outputs.length - 1))];
   const hasAnyDoc = outputs.some((o) => o.after != null);
@@ -83,12 +88,19 @@ export function DocumentSurface({
 
   const liveAvailable = !!current && /\.(md|mdx|markdown)$/i.test(current.rel) && current.after != null;
   const available: DocumentTab[] = [];
+  if (brief) available.push("brief");
   if (hasAnyDoc) available.push("document");
   if (diffAvailable) available.push("diff");
   if (liveAvailable) available.push("live");
-  if (run.hasSession && (session?.turns.length ?? 0) > 0) available.push("transcript");
+  if ((session?.turns.length ?? 0) > 0) available.push("transcript");
 
-  const defaultTab: DocumentTab = hasAnyDoc ? "document" : "transcript";
+  const defaultTab: DocumentTab = run.status === "running" && brief
+    ? "brief"
+    : hasAnyDoc
+      ? "document"
+      : brief
+        ? "brief"
+        : "transcript";
   const activeTab: DocumentTab | undefined =
     userTab && available.includes(userTab) ? userTab : available.includes(defaultTab) ? defaultTab : available[0];
 
@@ -103,13 +115,21 @@ export function DocumentSurface({
   if (available.length === 0) {
     return (
       <section className="flex min-h-[240px] flex-1 flex-col items-center justify-center rounded-[3px] border border-dashed border-border/60 bg-card/20 p-10 text-center">
-        <FileText size={26} className="text-muted-foreground/60" />
-        <h2 className="mt-3 font-editorial text-[18px] font-medium text-foreground">Nothing captured for this run</h2>
+        <FileText size={26} className={run.status === "running" ? "animate-pulse text-warning/70" : "text-muted-foreground/60"} />
+        <h2 className="mt-3 font-editorial text-[18px] font-medium text-foreground">
+          {run.status === "running" ? "Run is starting" : "Nothing captured for this run"}
+        </h2>
         <p className="mt-1.5 max-w-[46ch] text-[12.5px] text-muted-foreground">
-          This run declared no output document and has no Eve session to render. A{" "}
-          <code className="rounded-[2px] bg-muted/50 px-1 font-mono text-[11px]">write</code> or{" "}
-          <code className="rounded-[2px] bg-muted/50 px-1 font-mono text-[11px]">review-rewrite</code> mission
-          produces a document here.
+          {run.status === "running" ? (
+            "The brief, agent activity, and emerging document will appear here as they become available."
+          ) : (
+            <>
+              This run declared no output document and has no Eve session to render. A{" "}
+              <code className="rounded-[2px] bg-muted/50 px-1 font-mono text-[11px]">write</code> or{" "}
+              <code className="rounded-[2px] bg-muted/50 px-1 font-mono text-[11px]">review-rewrite</code> mission
+              produces a document here.
+            </>
+          )}
         </p>
       </section>
     );
@@ -120,6 +140,13 @@ export function DocumentSurface({
       {/* tab strip */}
       <div className="flex shrink-0 items-end justify-between gap-3 border-b border-[color:var(--hud-chrome-border-subtle)]">
         <div className="flex items-end gap-0.5">
+          <TabButton
+            active={activeTab === "brief"}
+            show={available.includes("brief")}
+            onClick={() => setUserTab("brief")}
+            icon={<MessageSquareQuote size={13} />}
+            label="Brief"
+          />
           <TabButton
             active={activeTab === "document"}
             show={available.includes("document")}
@@ -164,7 +191,7 @@ export function DocumentSurface({
       </div>
 
       {/* output selector (only when a run produced multiple documents) */}
-      {outputs.length > 1 && activeTab !== "transcript" && (
+      {outputs.length > 1 && activeTab !== "brief" && activeTab !== "transcript" && (
         <div className="flex shrink-0 flex-wrap items-center gap-1.5 border-b border-[color:var(--hud-chrome-border-subtle)] px-1 py-2">
           {outputs.map((o, i) => (
             <button
@@ -186,6 +213,22 @@ export function DocumentSurface({
 
       {/* body */}
       <div className="mw-scroll min-h-0 flex-1 overflow-auto pt-5">
+        {activeTab === "brief" && brief && (
+          <article className="rounded-[3px] border border-border/60 bg-card/20 px-6 py-9 sm:px-12">
+            <div className="mx-auto max-w-[70ch]">
+              <div className="mb-7 flex flex-wrap items-center justify-between gap-2 border-b border-[color:var(--hud-chrome-border-subtle)] pb-4">
+                <span className="text-[9.5px] font-medium uppercase tracking-[0.18em] text-muted-foreground/65">
+                  Original brief
+                </span>
+                <span className="font-mono text-[10px] text-muted-foreground/60">
+                  Captured at start · immutable
+                </span>
+              </div>
+              <Prose>{brief}</Prose>
+            </div>
+          </article>
+        )}
+
         {activeTab === "document" && current?.after != null && (
           <article className="rounded-[3px] border border-border/60 bg-card/20 px-6 py-9 sm:px-12">
             <div className="mx-auto max-w-[70ch]">
